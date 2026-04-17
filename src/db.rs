@@ -89,6 +89,7 @@ pub struct SearchResult {
     pub id: String,
     pub title: String,
     pub path: String,
+    pub folder: String,
     pub distance: f32,
 }
 
@@ -103,23 +104,23 @@ pub fn search(
     }
     let placeholders = vec!["?"; folders.len()].join(", ");
     let sql = format!(
-        "SELECT e.id, e.embedding, b.title, b.path
+        "SELECT e.id, e.embedding, b.title, b.path, b.folder
          FROM blueprint_embeddings e
          JOIN blueprints b ON e.id = b.id
          WHERE b.folder IN ({placeholders})"
     );
     let mut stmt = conn.prepare(&sql)?;
-    let raw: Vec<(String, Vec<u8>, String, String)> = stmt
+    let raw: Vec<(String, Vec<u8>, String, String, String)> = stmt
         .query_map(params_from_iter(folders.iter()), |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?))
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut results: Vec<SearchResult> = raw
         .into_iter()
-        .map(|(id, blob, title, path)| {
+        .map(|(id, blob, title, path, folder)| {
             let emb = deserialize(&blob);
             let distance = 1.0 - cosine_similarity(query, &emb);
-            SearchResult { id, title, path, distance }
+            SearchResult { id, title, path, folder, distance }
         })
         .collect();
     results.sort_by(|a, b| {

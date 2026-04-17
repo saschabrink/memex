@@ -1,11 +1,12 @@
 use anyhow::Result;
 
-use crate::commands::{commit_and_push, reindex_one, resolve_content};
+use crate::commands::{commit_and_push, ensure_writable, reindex_one, resolve_content};
 use crate::config::MemexConfig;
 
 pub fn run(cfg: &MemexConfig, id: &str, content_arg: &str) -> Result<()> {
     let content = resolve_content(content_arg.to_string())?;
     let resolved = cfg.resolve_blueprint(id)?;
+    ensure_writable(resolved.source)?;
     if let Some(parent) = resolved.file_path.parent() {
         std::fs::create_dir_all(parent)?;
     }

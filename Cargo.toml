@@ -1,6 +1,6 @@
 [package]
 name = "memex"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 description = "Personal knowledge base CLI with local semantic search."
 license = "MIT"
@@ -15,7 +15,9 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 dirs = "6"
 fastembed = "4"
+fancy-regex = "0.13"
 globset = "0.4"
+regex = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"

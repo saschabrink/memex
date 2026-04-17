@@ -14,6 +14,9 @@ pub struct Source {
     pub remote: Option<String>,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
+    /// Read-only sources reject `write`/`edit`/`delete`/`move` and show
+    /// a `(read-only)` title suffix in `list`/`search`.
+    pub readonly: bool,
 }
 
 impl Source {
@@ -138,6 +141,10 @@ impl MemexConfig {
         self.sources.iter().map(|s| s.name.clone()).collect()
     }
 
+    pub fn source_by_name(&self, name: &str) -> Option<&Source> {
+        self.sources.iter().find(|s| s.name == name)
+    }
+
     pub fn extract_title(&self, content: &str) -> String {
         for line in content.lines() {
             if let Some(rest) = line.strip_prefix("# ") {
@@ -238,6 +245,8 @@ struct RawSource {
     remote: Option<String>,
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
+    #[serde(default)]
+    readonly: bool,
 }
 
 /// Only looks for `./memex.toml` in the given directory. No upward search,
@@ -295,6 +304,7 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
             remote: raw_src.remote,
             include,
             exclude,
+            readonly: raw_src.readonly,
         });
     }
 

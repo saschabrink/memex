@@ -5,6 +5,41 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-04-17
+
+Hook infrastructure for deterministic, file-pattern-based context injection
+during agent-driven editing. Plus read-only sources, ready for Hex-package
+`usage-rules.md` integration.
+
+### Added
+- `hooks.toml` at project level (next to `memex.toml`) and optionally at each
+  source mount root. Auto-discovered, merged in declaration order.
+- Two hook primitives:
+  - `[[pre-write]]` — inject blueprint references before a file is edited.
+    Fields: `pattern` (regex, fancy-regex with backref support), `blueprint` or
+    `blueprints` (string or list).
+  - `[[post-write]]` — emit text advice after a file is written. Fields:
+    `pattern`, `text` (with `${0..n}` capture-group substitution),
+    optional `when_file_missing` / `when_file_exists` conditions.
+- `memex hook-advice <file> --event pre-write|post-write [--claude-hook]` —
+  print advice or emit the JSON expected by Claude Code's hook system.
+- `readonly = true` on a source blocks `write`/`edit`/`delete`/`move` with an
+  error and appends ` (read-only)` to titles in `list` / `search` output.
+- Strong validation on `hooks.toml` load: `pre-write` with `text`, `post-write`
+  with `blueprint`, both `blueprint` and `blueprints` set, missing required
+  fields, or invalid regex all error with a clear message.
+- `memex broken-refs` now also validates `blueprint` / `blueprints` references
+  inside every loaded `hooks.toml`. Unresolved ids are reported with their
+  event, pattern source, and originating source (or `project`).
+
+### Changed
+- First matching hook per event wins — deterministic, reihenfolge-controlled.
+  Merge order: project-level first, then per-source in the order sources are
+  declared in `memex.toml`, then entry order within each file.
+- Regex engine is now `fancy-regex` (drop-in) to support backreferences,
+  enabling patterns like `lib/platform/([^/]+)/\1\.ex$` for context-module
+  detection.
+
 ## [0.2.0] - 2026-04-17
 
 Breaking redesign of the configuration and storage model. No migration tool — blueprints are plain markdown files, copy them manually and rewrite `memex.toml`.

@@ -83,6 +83,7 @@ prefix  = "custom"              # optional. slug prefix. Default: source_name. "
 include = ["**/*.md"]           # optional. glob patterns relative to mount. Default: ["**/*.md"].
 exclude = ["drafts/**"]         # optional.
 remote  = "git@..."             # optional. if mount doesn't exist, memex clones from here on `sync`.
+readonly = true                 # optional. blocks writes, adds "(read-only)" to titles.
 ```
 
 ### Path resolution
@@ -207,6 +208,7 @@ EOF
 | `memex sync` | For each source with a `remote`: clone if missing, else `git pull` + `git push`. |
 | `memex rebuild-index` | Drop the index and rebuild from disk. Only needed after schema changes or index corruption — normal stale-check handles everything else. |
 | `memex broken-refs` | Find `[[slug]]` references in blueprint content that don't resolve to an existing blueprint. |
+| `memex hook-advice <file> --event pre-write\|post-write [--claude-hook]` | Look up matching hooks for `<file>`. See [Hooks](#hooks). |
 
 ### Cross-references
 
@@ -216,6 +218,59 @@ Inside blueprint content, use `[[slug]]` to reference another blueprint. `broken
 - **Bare-name match** — a ref without slashes (e.g. `[[context]]`) matches any slug whose last path segment equals the ref. Convenient for short links inside a tightly-coupled set of blueprints.
 
 If multiple slugs share the same last segment, a bare ref is still considered resolved (ambiguity is not flagged). Use the full slug when you need to disambiguate.
+
+## Hooks
+
+memex can answer "what blueprints or advice apply to this file?" for agent-driven editing workflows (e.g. Claude Code `PreToolUse` / `PostToolUse` hooks). Hooks live in `hooks.toml` files and are dispatched by file-path regex.
+
+### Discovery
+
+- `<project_root>/hooks.toml` — project-level, loaded first.
+- `<source_mount>/hooks.toml` — per-source, loaded in the order sources appear in `memex.toml`.
+
+Within each file, entries are evaluated in declaration order. **First match per event wins.**
+
+### Primitives
+
+Two event tables, both as TOML array-of-tables:
+
+```toml
+# Before writing a file: tell the agent which blueprints to read first.
+
+[[pre-write]]
+pattern   = "_live\\.ex$"
+blueprint = "phoenix-liveview/liveview"            # string
+
+[[pre-write]]
+pattern    = "lib/platform/([^/]+)/\\1\\.ex$"      # backref: context/context.ex
+blueprints = ["phoenix-liveview/context",          # list — "blueprint" also accepts a list
+              "phoenix-liveview/context-testing"]
+
+# After writing: emit text advice, optionally conditional on another file's presence.
+
+[[post-write]]
+pattern           = "^lib/(.+)\\.ex$"
+text              = "No test file found. Expected: test/${1}_test.exs — write the test before moving on."
+when_file_missing = "test/${1}_test.exs"           # only fires when this path doesn't exist
+```
+
+- **Regex:** fancy-regex syntax (PCRE-ish, with backreference support).
+- **Substitution:** `${0}` is the whole match; `${1}`, `${2}`, … are capture groups. Works in `text`, `when_file_missing`, `when_file_exists`.
+- **Conditions:** `when_file_missing` / `when_file_exists` — hook only fires when the named path (relative to project root) is absent / present.
+- **Blueprint keys:** `blueprint` and `blueprints` are interchangeable, both accept a string or a list. Setting both at once is an error.
+- **Validation:** `pre-write` with `text`, `post-write` with `blueprint`, missing required fields, or invalid regex all error at load time with a clear message.
+
+### Use with Claude Code
+
+Project-level hook shell-script becomes a three-liner, independent of which patterns are configured:
+
+```bash
+#!/usr/bin/env bash
+FILE_PATH=$(jq -r '.tool_input.file_path // ""')
+memex hook-advice "$FILE_PATH" --event pre-write --claude-hook
+```
+
+`memex hook-advice` without `--claude-hook` prints a human-readable line for debugging. No match → nothing is printed (which Claude Code treats as a no-op).
 
 ## How it works
 

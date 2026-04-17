@@ -48,6 +48,18 @@ enum Command {
     BrokenRefs,
     #[command(about = "Sync sources that have a remote (clone/pull/push).")]
     Sync,
+    #[command(
+        about = "Print hook advice for a file (blueprints to read / post-write text).",
+        long_about = "Looks up matching hooks in hooks.toml files (project-level + per-source). \
+                      With --claude-hook, emits the JSON expected by Claude Code's hook system."
+    )]
+    HookAdvice {
+        file: String,
+        #[arg(long, default_value = "pre-write", help = "pre-write | post-write")]
+        event: String,
+        #[arg(long, help = "Emit Claude Code hook JSON instead of human output.")]
+        claude_hook: bool,
+    },
 }
 
 fn main() -> Result<()> {
@@ -73,5 +85,10 @@ fn main() -> Result<()> {
         Command::Diff { id, hash } => commands::diff::run(&cfg, &id, &hash),
         Command::BrokenRefs => commands::broken_refs::run(&cfg),
         Command::Sync => commands::sync::run(&cfg),
+        Command::HookAdvice {
+            file,
+            event,
+            claude_hook,
+        } => commands::hook_advice::run(&cfg, &file, &event, claude_hook),
     }
 }

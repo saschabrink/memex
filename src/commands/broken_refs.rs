@@ -2,6 +2,7 @@ use anyhow::Result;
 use std::collections::BTreeSet;
 
 use crate::config::MemexConfig;
+use crate::hooks;
 use crate::links;
 
 pub fn run(cfg: &MemexConfig) -> Result<()> {
@@ -46,6 +47,44 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
             );
         }
     }
+    // Also check hook blueprint references. Bare (no-slash) ids fall back to
+    // the same tail-match rule as `[[slug]]` refs in blueprint bodies.
+    let set = hooks::load(cfg)?;
+    let check_hook = |hook: &hooks::Hook, event: &str, any: &mut bool| {
+        let unresolved: Vec<&str> = hook
+            .blueprints
+            .iter()
+            .filter(|s| {
+                if all_slugs.contains(s.as_str()) {
+                    return false;
+                }
+                if !s.contains('/') && tails.contains(s.as_str()) {
+                    return false;
+                }
+                true
+            })
+            .map(|s| s.as_str())
+            .collect();
+        if !unresolved.is_empty() {
+            *any = true;
+            let origin = match &hook.source {
+                Some(name) => format!("source '{name}'"),
+                None => "project".to_string(),
+            };
+            println!(
+                "hook [{event}] {} in {origin}: {}",
+                hook.pattern_src,
+                unresolved.join(", ")
+            );
+        }
+    };
+    for hook in &set.pre_write {
+        check_hook(hook, "pre-write", &mut any);
+    }
+    for hook in &set.post_write {
+        check_hook(hook, "post-write", &mut any);
+    }
+
     if !any {
         println!("No broken references found.");
     }

@@ -9,6 +9,7 @@ pub mod broken_refs;
 pub mod delete;
 pub mod diff;
 pub mod edit;
+pub mod hook_advice;
 pub mod list;
 pub mod move_;
 pub mod read;
@@ -17,6 +18,17 @@ pub mod search;
 pub mod sync;
 pub mod versions;
 pub mod write;
+
+/// Error out if the source is marked `readonly = true`.
+pub fn ensure_writable(source: &Source) -> Result<()> {
+    if source.readonly {
+        return Err(anyhow!(
+            "source '{}' is read-only; writes are not permitted",
+            source.name
+        ));
+    }
+    Ok(())
+}
 
 pub fn read_stdin() -> Result<String> {
     let mut buf = String::new();

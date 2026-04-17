@@ -1,12 +1,14 @@
 use anyhow::Result;
 
-use crate::commands::commit_and_push;
+use crate::commands::{commit_and_push, ensure_writable};
 use crate::config::MemexConfig;
 use crate::{db, indexer, refresh};
 
 pub fn run(cfg: &MemexConfig, old_id: &str, new_id: &str) -> Result<()> {
     let old = cfg.resolve_blueprint(old_id)?;
     let new = cfg.resolve_blueprint(new_id)?;
+    ensure_writable(old.source)?;
+    ensure_writable(new.source)?;
 
     if !old.file_path.exists() {
         println!("Blueprint '{old_id}' not found.");

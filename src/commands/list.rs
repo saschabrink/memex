@@ -9,7 +9,12 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
     refresh::refresh(cfg, &mut conn)?;
     let rows = db::list_all(&conn, &cfg.all_source_names())?;
     for row in rows {
-        println!("{}  {}", row.id, row.title);
+        let ro = cfg
+            .source_by_name(&row.folder)
+            .map(|s| s.readonly)
+            .unwrap_or(false);
+        let suffix = if ro { "  (read-only)" } else { "" };
+        println!("{}  {}{}", row.id, row.title, suffix);
     }
     Ok(())
 }
