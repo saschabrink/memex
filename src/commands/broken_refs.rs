@@ -71,9 +71,14 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
                 Some(name) => format!("source '{name}'"),
                 None => "project".to_string(),
             };
+            let label = match (&hook.pattern_src, &hook.content_pattern_src) {
+                (Some(p), Some(c)) => format!("path={p} content={c}"),
+                (Some(p), None) => p.clone(),
+                (None, Some(c)) => format!("content={c}"),
+                (None, None) => "(unnamed)".to_string(),
+            };
             println!(
-                "hook [{event}] {} in {origin}: {}",
-                hook.pattern_src,
+                "hook [{event}] {label} in {origin}: {}",
                 unresolved.join(", ")
             );
         }

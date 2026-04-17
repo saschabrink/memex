@@ -311,7 +311,7 @@ memex is a CLI, not an MCP server, and that's intentional. MCP re-attaches tool 
 
 ## Hooks
 
-memex can answer "what blueprints or advice apply to this file?" for agent-driven editing workflows (e.g. Claude Code `PreToolUse` / `PostToolUse` hooks). Hooks live in `hooks.toml` files and are dispatched by file-path regex.
+memex can answer "what blueprints or advice apply to this file?" for agent-driven editing workflows (e.g. Claude Code `PreToolUse` / `PostToolUse` hooks). Hooks live in `hooks.toml` files and are dispatched by file-path regex, file-content regex, or both.
 
 ### Discovery
 
@@ -336,6 +336,17 @@ pattern    = "lib/platform/([^/]+)/\\1\\.ex$"      # backref: context/context.ex
 blueprints = ["phoenix-liveview/context",          # list — "blueprint" also accepts a list
               "phoenix-liveview/context-testing"]
 
+# Match on file contents, not just path — useful when semantics aren't in the filename.
+
+[[pre-write]]
+content_pattern = "(?m)^\\s*use Ecto\\.Schema"    # any Elixir file that declares an Ecto schema
+blueprint       = "ecto-schema"
+
+[[pre-write]]
+pattern         = "^test/.*_test\\.exs$"
+content_pattern = "Req\\.Test"                    # both must match: path AND content
+blueprint       = "req-testing"
+
 # After writing: emit text advice, optionally conditional on another file's presence.
 
 [[post-write]]
@@ -345,10 +356,12 @@ when_file_missing = "test/${1}_test.exs"           # only fires when this path d
 ```
 
 - **Regex:** fancy-regex syntax (PCRE-ish, with backreference support).
-- **Substitution:** `${0}` is the whole match; `${1}`, `${2}`, … are capture groups. Works in `text`, `when_file_missing`, `when_file_exists`.
-- **Conditions:** `when_file_missing` / `when_file_exists` — hook only fires when the named path (relative to project root) is absent / present.
+- **`pattern`** matches the file path (relative to project root, forward-slash). **`content_pattern`** matches the file's current contents. At least one must be set; if both are set, both must match. Use inline flags (`(?m)`, `(?i)`, etc.) as needed — `^` / `$` are whole-string by default.
+- **Substitution:** `${0}` is the whole match of the path regex; `${1}`, `${2}`, … are its capture groups. Works in `text`, `when_file_missing`, `when_file_exists`. Content-regex captures aren't substitutable.
+- **Conditions:** `when_file_missing` / `when_file_exists` — hook only fires when the named path (relative to project root) is absent / present. Not combinable with `content_pattern` + `when_file_missing` (contradiction — a content match requires the file to exist).
+- **Content size cap:** files larger than 1 MB are skipped for `content_pattern` matching (hook silently doesn't fire). Keeps the walker bounded on generated / vendored files.
 - **Blueprint keys:** `blueprint` and `blueprints` are interchangeable, both accept a string or a list. Setting both at once is an error.
-- **Validation:** `pre-write` with `text`, `post-write` with `blueprint`, missing required fields, or invalid regex all error at load time with a clear message.
+- **Validation:** `pre-write` with `text`, `post-write` with `blueprint`, missing required fields, invalid regex in either `pattern` or `content_pattern`, or the `when_file_missing` + `content_pattern` combination all error at load time with a clear message.
 
 ### Use with Claude Code
 

@@ -424,6 +424,155 @@ readonly = true
     assert!(cfg.source_by_name("frozen").unwrap().readonly);
 }
 
+// ---------- content_pattern ----------
+
+#[test]
+fn content_pattern_matches_when_file_contains_marker() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*\\.ex$"
+content_pattern = "(?m)^\\s*use Ecto\\.Schema"
+blueprint = "ecto-schema"
+"#,
+    );
+    write_file(
+        &env.project_dir.join("lib/foo.ex"),
+        "defmodule Foo do\n  use Ecto.Schema\nend\n",
+    );
+    write_file(
+        &env.project_dir.join("lib/bar.ex"),
+        "defmodule Bar do\n  # no schema here\nend\n",
+    );
+
+    let set = hooks::load(&env.cfg).unwrap();
+    let hit = set
+        .advise(Event::PreWrite, "lib/foo.ex", &env.project_dir)
+        .unwrap();
+    assert_eq!(hit.blueprints, vec!["ecto-schema"]);
+
+    assert!(set
+        .advise(Event::PreWrite, "lib/bar.ex", &env.project_dir)
+        .is_none());
+}
+
+#[test]
+fn content_pattern_alone_without_path_pattern_is_valid() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+content_pattern = "Req\\.Test"
+blueprint = "req-testing"
+"#,
+    );
+    write_file(
+        &env.project_dir.join("test/some_test.exs"),
+        "setup do\n  Req.Test.stub(...)\nend\n",
+    );
+
+    let set = hooks::load(&env.cfg).unwrap();
+    let hit = set
+        .advise(Event::PreWrite, "test/some_test.exs", &env.project_dir)
+        .unwrap();
+    assert_eq!(hit.blueprints, vec!["req-testing"]);
+}
+
+#[test]
+fn content_pattern_does_not_match_when_file_missing() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*\\.ex$"
+content_pattern = "anything"
+blueprint = "x"
+"#,
+    );
+    let set = hooks::load(&env.cfg).unwrap();
+    assert!(set
+        .advise(Event::PreWrite, "lib/nonexistent.ex", &env.project_dir)
+        .is_none());
+}
+
+#[test]
+fn content_pattern_skips_oversize_files() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+content_pattern = "marker"
+blueprint = "x"
+"#,
+    );
+    // Build a file just over the 1 MB cap, with the marker at the top.
+    let big = format!(
+        "marker\n{}",
+        "a".repeat(memex::hooks::MAX_CONTENT_BYTES as usize)
+    );
+    write_file(&env.project_dir.join("big.txt"), &big);
+
+    let set = hooks::load(&env.cfg).unwrap();
+    assert!(set
+        .advise(Event::PreWrite, "big.txt", &env.project_dir)
+        .is_none());
+}
+
+#[test]
+fn load_errors_when_neither_pattern_nor_content_pattern_set() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+blueprint = "x"
+"#,
+    );
+    let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
+    assert!(
+        err.contains("pattern") && err.contains("content_pattern"),
+        "got: {err}"
+    );
+}
+
+#[test]
+fn load_errors_on_content_pattern_with_when_file_missing() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*"
+content_pattern = "foo"
+when_file_missing = "bar"
+blueprint = "x"
+"#,
+    );
+    let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
+    assert!(err.contains("when_file_missing"), "got: {err}");
+}
+
+#[test]
+fn load_errors_on_invalid_content_pattern_regex() {
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*"
+content_pattern = "*"
+blueprint = "x"
+"#,
+    );
+    let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
+    assert!(err.contains("content_pattern"), "got: {err}");
+}
+
 // ---------- TestEnv helper ----------
 
 impl TestEnv {

@@ -5,6 +5,43 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-04-17
+
+Hooks can now match on file contents, not just paths. Lets you target
+Ecto schemas, Req test stubs, or any other code shape whose semantics
+aren't expressed in the filename.
+
+### Added
+- `content_pattern` on `[[pre-write]]` and `[[post-write]]` hooks —
+  fancy-regex matched against the file's current text. Combinable with
+  `pattern` (both must match = AND), or used alone for pure-content
+  hooks. Supports inline flags like `(?m)` for per-line anchors.
+- Content reads are capped at 1 MB (`memex::hooks::MAX_CONTENT_BYTES`);
+  larger files silently don't match, keeping the dispatcher bounded on
+  generated or vendored content.
+- File content is read lazily and cached across the hook loop, so
+  multiple content-pattern hooks on the same dispatch cost one read.
+
+### Changed
+- `pattern` is now optional on hooks — at least one of `pattern` /
+  `content_pattern` must be set. Existing hooks (path-only) keep working
+  unchanged.
+- `memex broken-refs` labels hook references with both patterns when
+  both are set: `hook [pre-write] path=... content=... in project: ...`.
+
+### Validation
+- Load error if neither `pattern` nor `content_pattern` is set.
+- Load error if `content_pattern` is combined with `when_file_missing`
+  (contradiction: content matching requires the file to exist).
+- Load error on invalid content-regex, same shape as path-regex errors.
+
+### Rationale
+Path-based matching forces naming conventions to carry semantics
+(`*_schema.ex`, `*_req_test.exs`). That works until it doesn't — Ecto
+schemas live in modules named after the thing they model, and Req test
+stubs can appear in any test file. Content matching lets the hook see
+what the path hides.
+
 ## [0.7.0] - 2026-04-17
 
 Per-source diagnostics. Answers "why isn't my blueprint showing up?"
