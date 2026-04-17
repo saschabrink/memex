@@ -5,6 +5,44 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-17
+
+Two doc-hygiene improvements: an annotated `memex.toml` example shipped
+inside the binary, and `agent-instructions` now auto-generates this
+project's source list from `memex.toml`. Together they remove two more
+places where documentation could drift from configuration.
+
+memex also sheds its residual MCP vocabulary. The tool is a CLI and that
+choice is now explicit everywhere.
+
+### Added
+- `memex example-config` — prints a fully annotated `memex.toml` example
+  embedded in the binary via `include_str!`. Covers every option plus
+  copy-paste starting points for Elixir/Hex, Node `node_modules`, Ruby
+  gems, Rust `cargo vendor`, Python `site-packages`, and Obsidian vaults.
+  Works offline, matches the binary version exactly.
+- `examples/memex.example.toml` — source of the embedded example.
+- `memex agent-instructions` auto-generates a "This project's sources"
+  section when a `memex.toml` is discoverable from the cwd. Source list
+  stays drift-free because it is derived from the config, not transcribed
+  into `CLAUDE.md` / `AGENTS.md`.
+
+### Changed
+- Agent-instructions brief replaces the fictional MCP tool-name block
+  (`mcp__memex__*`) with a real CLI-command list (`search`, `read`,
+  `list`, `write`, `edit`, `broken-refs`) plus a shell-plumbing example.
+  Expresses that memex is a CLI and no MCP server is planned.
+- `memex hook-advice --claude-hook` pre-write messages reference
+  `memex read <id>` instead of the non-existent MCP tool.
+- README: new "Works with Obsidian" section explaining vault
+  compatibility; new "No MCP server" rationale; new "Roadmap" covering
+  CI-on-PR gates, `memex doctor`, shell completions, `memex init`; new
+  "The name" section on the Vannevar Bush origin.
+
+### Removed
+- All references to an MCP server / `mcp__memex__*` tools. memex is a
+  CLI-only tool; shell-exec is the invocation surface.
+
 ## [0.5.0] - 2026-04-17
 
 Doc-hygiene primitive: `broken-refs` now also scans external files for

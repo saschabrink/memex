@@ -1,12 +1,12 @@
 # memex
 
-A personal knowledge base CLI. Store and search markdown notes ("blueprints") with semantic search powered by a local embedding model — no external services, no API keys, no network required after the initial model download.
+A personal knowledge base CLI. Store and search markdown notes ("blueprints") with semantic search powered by a local embedding model — no external services, no API keys, no network required after the initial model download. Works with Obsidian vaults out of the box.
 
 Every write is automatically committed to git, so every blueprint has a full version history.
 
 ## Highlights
 
-- **Blueprints are just markdown files in your project** — no hidden `.memex/` dump. Point memex at any folder structure you already have.
+- **Blueprints are just markdown files** — point memex at any folder structure you already have.
 - **Single binary**, no runtime, no `node_modules`.
 - **Fast cold start** (low tens of milliseconds).
 - **Self-healing index**: every `search` / `list` runs a SHA-256 staleness check and re-embeds anything that changed on disk.
@@ -297,12 +297,16 @@ The CLI output is plain markdown, safe to inline into any agent's context.
 
 ### What the brief covers
 
-- MCP tool names and when to use each (`search_blueprints`, `read_blueprint`, `list_blueprints`).
+- Core commands and when to use each (`search`, `read`, `list`, `write`, `edit`, `broken-refs`).
 - When to reach for memex vs. asking the user vs. guessing.
 - What not to do (paraphrasing blueprint content, skipping hook advice, writing to read-only sources).
-- CLI fallbacks for environments without MCP.
+- Auto-generated summary of this project's sources when a `memex.toml` is present.
 
 The brief is project-agnostic. Project-specific context (architecture, conventions, no-gos) belongs in your `CLAUDE.md` / `AGENTS.md` alongside — not duplicated into memex.
+
+### No MCP server
+
+memex is a CLI, not an MCP server, and that's intentional. MCP re-attaches tool schemas to every message, inflating prompt budgets for tools that are only occasionally used. A well-trained agent is already excellent at shell-exec (`Bash`, or the equivalent), so memex surfaces as just another command — which composes freely with the rest of the shell. You can pipe into `memex write`, `xargs` over `memex read`, chain commands, do anything a CLI gives you. That optionality is worth more than the marginal convenience of MCP tool-calls, for this particular tool.
 
 ## Hooks
 
@@ -386,6 +390,25 @@ On every `search` and `list`:
 
 In the steady state, this is ~10ms for a few dozen blueprints — fast enough to run unconditionally.
 
+## Works with Obsidian
+
+memex and [Obsidian](https://obsidian.md/) read the same thing: plain markdown files in folders, with `[[wikilinks]]` between them. If you already have an Obsidian vault, point a memex source at it and you're done:
+
+```toml
+project_name = "notes"
+
+[vault]
+mount  = "~/Documents/ObsidianVault"
+prefix = ""
+```
+
+You now have:
+
+- **Obsidian's native UX** — graph view, backlinks panel, live preview, plugins — unchanged.
+- **memex on top** — semantic search across the same files, CLI access, git-backed version history, `[[slug]]` reference validation via `broken-refs`.
+
+Both tools use `[[slug]]` as the link syntax, so Obsidian's clickable links and memex' cross-reference checker are looking at the same edges. `memex.toml` lives in the vault root and is invisible to Obsidian (it ignores non-markdown files). The vector index lives in the OS cache directory, not in the vault.
+
 ## Development
 
 Requires [Nix](https://nixos.org/) with flakes, or a system-wide Rust toolchain.
@@ -423,6 +446,34 @@ To cut a release:
 git tag v0.4.0
 git push --tags
 ```
+
+## Roadmap
+
+Tracked milestones toward a 1.0 stable release. Not promises — directions. Open an issue if you want to push any of these forward.
+
+### CI on every push and PR
+Today, tests, `clippy`, and `fmt` only run when a release tag is pushed. They should gate every commit to `main` and every PR. Low-effort, high-trust payoff — until then, "green" only means the last release built.
+
+### `memex doctor`
+A single command that explains, per source, what memex sees: mount resolves to this path, N files matched, M files skipped because of a foreign `.git/` subtree or an `exclude` glob, remote reachable, no permission issues. Today, silent skips are the #1 source of "why isn't this blueprint showing up?" support questions. Doctor replaces that with a printed answer.
+
+### Shell completions
+`memex completions bash|zsh|fish|elvish` emitting completion scripts via `clap_complete`. Tab-complete for slugs (from the index), commands, and flags. Standard for modern CLIs, currently missing.
+
+### `memex init`
+Interactive bootstrap — project name, repo root, add a remote source (y/n), add a `deps` source for your language (elixir/node/ruby/rust/python)? — writing a minimal `memex.toml`. The `example-config` command covers power users; `init` covers first-time users who want a working config without reading docs.
+
+### Beyond 1.0
+- Broader prebuilt binary matrix (macOS x86_64, Linux arm64, eventually Windows).
+- Signed release artifacts (cosign/sigstore) alongside the existing SHA-256 sidecars.
+- A hosted docs site with recipes per ecosystem, beyond what the README can carry.
+- Explicit CLI and config-schema stability guarantee once shape has settled.
+
+## The name
+
+"memex" is short for **memory extender** — the term Vannevar Bush coined in his 1945 Atlantic essay *[As We May Think](https://www.theatlantic.com/magazine/archive/1945/07/as-we-may-think/303881/)*. Bush imagined a desk-sized device on which a scientist could store all their books, records, and correspondence, and consult any of them at mechanical speed by following trails of associative links between them — a kind of pre-digital hypertext machine, eighty years before LLMs needed one.
+
+Bush got the physical medium wrong (microfilm and levers, not transistors), but the core idea — externalise associative memory, make it navigable by following links — became the blueprint for the web. This tool is named in that lineage, with rather more modest ambitions: a desk-sized knowledge base you can hand to an agent without it losing the thread.
 
 ## License
 

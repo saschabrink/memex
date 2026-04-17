@@ -28,7 +28,7 @@ fn emit_claude_hook(event: Event, advice: Option<&hooks::HookAdvice>) {
             let mut s = String::new();
             for id in &advice.blueprints {
                 s.push_str(&format!(
-                    "Read blueprint '{id}' via mcp__memex__read_blueprint before editing this file, unless it is already in your context. "
+                    "Read blueprint '{id}' via `memex read {id}` before editing this file, unless it is already in your context. "
                 ));
             }
             s

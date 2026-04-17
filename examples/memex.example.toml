@@ -1,0 +1,154 @@
+# memex.toml — fully annotated example
+#
+# Every option memex supports, with commentary and copy-paste starting
+# points for common language ecosystems.
+#
+# Convention in this file:
+#   [source_name]         — an enabled source
+#   # [another_source]    — a commented example; uncomment & adapt.
+#
+# Path rules (apply everywhere):
+#   • `root` is relative to this file.
+#   • `mount` per source is relative to `root`.
+#   • `include` / `exclude` globs are relative to `mount`.
+#   • All paths accept ~/ and ${ENV_VAR} expansion.
+
+# ═══════════════════════════════════════════════════════════════════════
+# Required
+# ═══════════════════════════════════════════════════════════════════════
+
+project_name = "my_project"
+# Used as the index directory name under the OS cache
+# (~/Library/Caches/memex/indexes/<project_name>/ on macOS,
+# $XDG_CACHE_HOME/memex/indexes/<project_name>/ on Linux).
+
+# ═══════════════════════════════════════════════════════════════════════
+# Optional top-level settings
+# ═══════════════════════════════════════════════════════════════════════
+
+# root = "."
+# Project root, relative to this file. Default: "." (same directory).
+
+# also_scan = ["CLAUDE.md", "AGENTS.md", ".claude/**/*.md"]
+# Extra files scanned for [[slug]] references on `memex broken-refs`.
+# NOT indexed — no slugs produced, no search hits, no collisions. Use
+# for agent-brief files (CLAUDE.md, AGENTS.md, role docs) that link to
+# blueprints but aren't blueprints themselves. Missing files are silently
+# ignored. Noise directories skipped during the walk: .git, node_modules,
+# target, _build, .next, deps.
+
+# ═══════════════════════════════════════════════════════════════════════
+# Source: project-owned blueprints
+# ═══════════════════════════════════════════════════════════════════════
+
+[project]
+mount = "docs"
+# include = ["**/*.md"]     # default — all .md files under mount
+# exclude = ["drafts/**"]   # optional
+# prefix  = "project"       # default = source name.
+                            # Use prefix = "" for bare slugs (at most one
+                            # source per config may have "").
+
+# ═══════════════════════════════════════════════════════════════════════
+# Source: shared blueprints, synced from a remote git repo
+# ═══════════════════════════════════════════════════════════════════════
+
+# [shared]
+# mount    = "docs/shared"
+# remote   = "https://github.com/your-org/shared-blueprints.git"
+# readonly = true
+# On `memex sync`: clones if missing, else `git pull --ff-only`.
+# Auto-added to .gitignore so the clone isn't tracked by your outer
+# project. Use `readonly = true` for org-shared content that should be
+# edited upstream only — blocks write/edit/delete/move and appends
+# " (read-only)" to titles in `list` / `search` output.
+
+# ═══════════════════════════════════════════════════════════════════════
+# Per-dependency usage rules — language-independent pattern
+# ═══════════════════════════════════════════════════════════════════════
+#
+# Many package ecosystems have started shipping a per-package agent brief:
+# `usage-rules.md` in Elixir/Hex (ExFoundry, Ash, …), `AGENTS.md` in
+# emerging Node/Rust conventions, `llms.txt` on the horizon.
+#
+# The `index_filename` option makes the matching file represent its
+# parent directory as a slug — so `<ecosystem_dir>/<pkg>/<brief>` becomes
+# the slug `<prefix>/<pkg>`, which is what you want to reference.
+#
+# Pick the block(s) that match your stack. Polyglot projects can enable
+# several in parallel (just give them distinct source names).
+
+# ─── Elixir / Hex deps ────────────────────────────────────────────────
+# deps/ecto_context/usage-rules.md → slug `deps/ecto_context`
+
+# [deps]
+# mount          = "deps"
+# include        = ["*/usage-rules.md"]
+# index_filename = "usage-rules.md"
+# readonly       = true
+
+# ─── Node.js / npm node_modules ───────────────────────────────────────
+# node_modules/react/AGENTS.md          → slug `node_modules/react`
+# node_modules/@scope/pkg/AGENTS.md     → slug `node_modules/@scope/pkg`
+
+# [node_modules]
+# mount          = "node_modules"
+# include        = ["*/AGENTS.md", "@*/*/AGENTS.md"]
+# index_filename = "AGENTS.md"
+# readonly       = true
+
+# ─── Ruby / Bundler gems ──────────────────────────────────────────────
+# Bundler installs gems outside the project by default. Either symlink
+# or configure a local path once:
+#     ln -s "$(bundle info --path)" vendor/gems
+#   OR
+#     bundle config set --local path 'vendor/bundle' && bundle install
+
+# [gems]
+# mount          = "vendor/gems"
+# include        = ["*/USAGE.md"]
+# index_filename = "USAGE.md"
+# readonly       = true
+
+# ─── Rust / cargo vendor ──────────────────────────────────────────────
+# After `cargo vendor` puts crates at vendor/<crate>/:
+
+# [crates]
+# mount          = "vendor"
+# include        = ["*/AGENTS.md"]
+# index_filename = "AGENTS.md"
+# readonly       = true
+
+# ─── Python / site-packages ───────────────────────────────────────────
+# site-packages lives inside the venv. Symlink it into the project, or
+# point `mount` directly at the venv path:
+#     ln -s .venv/lib/python3.12/site-packages vendor/python
+
+# [pypi]
+# mount          = "vendor/python"
+# include        = ["*/AGENTS.md"]
+# index_filename = "AGENTS.md"
+# readonly       = true
+
+# ═══════════════════════════════════════════════════════════════════════
+# Obsidian vault
+# ═══════════════════════════════════════════════════════════════════════
+#
+# memex and Obsidian share the same substrate: markdown + [[wikilinks]].
+# Point a source at an existing vault and you get semantic search,
+# git-backed versioning, and broken-link checking — without touching
+# Obsidian's UX. The vault remains a normal vault.
+
+# [vault]
+# mount  = "~/Documents/ObsidianVault"
+# prefix = ""
+# Example slug: ObsidianVault/ideas/fitness.md → `ideas/fitness`
+
+# ═══════════════════════════════════════════════════════════════════════
+# See also
+# ═══════════════════════════════════════════════════════════════════════
+#
+# • `hooks.toml` (sibling file) — pattern-based context injection for
+#   agent-driven editing. See the Hooks section of the README.
+# • `memex agent-instructions` — ready-to-use brief for LLM agents,
+#   emittable as a Claude Code SessionStart hook with --claude-hook.

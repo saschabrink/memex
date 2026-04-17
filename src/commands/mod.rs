@@ -10,6 +10,7 @@ pub mod broken_refs;
 pub mod delete;
 pub mod diff;
 pub mod edit;
+pub mod example_config;
 pub mod hook_advice;
 pub mod list;
 pub mod move_;

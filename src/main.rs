@@ -70,6 +70,14 @@ enum Command {
         #[arg(long, help = "Emit Claude Code SessionStart hook JSON instead of plain markdown.")]
         claude_hook: bool,
     },
+    #[command(
+        about = "Print a fully annotated memex.toml example.",
+        long_about = "Prints the annotated memex.toml example embedded in this binary. \
+                      Use to bootstrap a project (`memex example-config > memex.toml`) \
+                      or to look up an option without leaving the terminal. \
+                      Does not require a memex.toml."
+    )]
+    ExampleConfig,
 }
 
 fn main() -> Result<()> {
@@ -78,6 +86,9 @@ fn main() -> Result<()> {
     // Commands that do not require a memex.toml.
     if let Command::AgentInstructions { claude_hook } = &cli.command {
         return commands::agent_instructions::run(*claude_hook);
+    }
+    if let Command::ExampleConfig = &cli.command {
+        return commands::example_config::run();
     }
 
     let cwd = std::env::current_dir()?;
@@ -107,5 +118,6 @@ fn main() -> Result<()> {
             claude_hook,
         } => commands::hook_advice::run(&cfg, &file, &event, claude_hook),
         Command::AgentInstructions { .. } => unreachable!("handled above"),
+        Command::ExampleConfig => unreachable!("handled above"),
     }
 }
