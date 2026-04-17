@@ -11,6 +11,19 @@ fn extracts_slug_with_digits_and_dashes() {
 }
 
 #[test]
+fn extracts_slug_with_prefix_slash() {
+    assert_eq!(
+        extract("See [[bp/vision]] and [[phoenix-liveview/context]]."),
+        vec!["bp/vision", "phoenix-liveview/context"]
+    );
+}
+
+#[test]
+fn preserves_case_in_slugs() {
+    assert_eq!(extract("[[TODOs]] and [[README]]"), vec!["TODOs", "README"]);
+}
+
+#[test]
 fn dedupes_repeated_slugs_preserving_order() {
     assert_eq!(
         extract("[[alpha]] and [[beta]] then [[alpha]] again."),
@@ -31,10 +44,11 @@ fn ignores_slugs_inside_inline_code() {
 
 #[test]
 fn rejects_invalid_slugs() {
-    assert!(extract("[[Foo]]").is_empty());
-    assert!(extract("[[1abc]]").is_empty());
     assert!(extract("[[has space]]").is_empty());
-    assert!(extract("[[UPPER]]").is_empty());
+    assert!(extract("[[/leading-slash]]").is_empty());
+    assert!(extract("[[trailing-slash/]]").is_empty());
+    assert!(extract("[[double//slash]]").is_empty());
+    assert!(extract("[[]]").is_empty());
 }
 
 #[test]

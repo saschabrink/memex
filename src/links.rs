@@ -76,10 +76,14 @@ fn find_links(s: &str) -> Vec<String> {
 }
 
 fn is_valid_slug(s: &str) -> bool {
-    let mut chars = s.chars();
-    match chars.next() {
-        Some(c) if c.is_ascii_lowercase() => {}
-        _ => return false,
+    if s.is_empty() {
+        return false;
     }
-    chars.all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-')
+    // allow: letters (any case), digits, `-`, `_`, `.`, `/`.
+    // disallow: whitespace, control chars, pipe (wiki-style alias syntax).
+    s.chars().all(|c| {
+        c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/')
+    }) && !s.starts_with('/')
+        && !s.ends_with('/')
+        && !s.contains("//")
 }

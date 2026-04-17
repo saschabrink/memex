@@ -7,7 +7,7 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
     let mut conn = db::connect(&cfg.db_path())?;
     db::setup(&conn)?;
     refresh::refresh(cfg, &mut conn)?;
-    let rows = db::list_all(&conn, &cfg.all_folders())?;
+    let rows = db::list_all(&conn, &cfg.all_source_names())?;
     for row in rows {
         println!("{}  {}", row.id, row.title);
     }

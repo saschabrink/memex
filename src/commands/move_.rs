@@ -1,7 +1,8 @@
 use anyhow::Result;
 
+use crate::commands::commit_and_push;
 use crate::config::MemexConfig;
-use crate::{db, git, indexer, refresh};
+use crate::{db, indexer, refresh};
 
 pub fn run(cfg: &MemexConfig, old_id: &str, new_id: &str) -> Result<()> {
     let old = cfg.resolve_blueprint(old_id)?;
@@ -23,21 +24,21 @@ pub fn run(cfg: &MemexConfig, old_id: &str, new_id: &str) -> Result<()> {
 
     if same_source {
         std::fs::rename(&old.file_path, &new.file_path)?;
-        git::commit(
-            &old.source.path,
+        commit_and_push(
+            old.source,
             &[&old.file_path, &new.file_path],
             &format!("Move blueprint: {old_id} → {new_id}"),
         )?;
     } else {
         std::fs::write(&new.file_path, &content)?;
-        git::commit(
-            &new.source.path,
+        commit_and_push(
+            new.source,
             &[&new.file_path],
             &format!("Add blueprint (moved from {old_id}): {new_id}"),
         )?;
         std::fs::remove_file(&old.file_path)?;
-        git::commit(
-            &old.source.path,
+        commit_and_push(
+            old.source,
             &[&old.file_path],
             &format!("Delete blueprint (moved to {new_id}): {old_id}"),
         )?;
@@ -54,7 +55,7 @@ pub fn run(cfg: &MemexConfig, old_id: &str, new_id: &str) -> Result<()> {
         new_id,
         &cfg.extract_title(&content),
         &new.file_path.to_string_lossy(),
-        &cfg.blueprint_folder(new.source, &new.file_path),
+        &new.source.name,
         &content,
         &hash,
         &emb,

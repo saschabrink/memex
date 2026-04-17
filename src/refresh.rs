@@ -62,7 +62,7 @@ pub fn refresh(cfg: &MemexConfig, conn: &mut rusqlite::Connection) -> Result<()>
             id,
             &cfg.extract_title(content),
             &file_path.to_string_lossy(),
-            &cfg.blueprint_folder(source, file_path),
+            &source.name,
             content,
             hash,
             emb,

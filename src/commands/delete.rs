@@ -1,7 +1,8 @@
 use anyhow::Result;
 
+use crate::commands::commit_and_push;
 use crate::config::MemexConfig;
-use crate::{db, git};
+use crate::db;
 
 pub fn run(cfg: &MemexConfig, id: &str) -> Result<()> {
     let resolved = cfg.resolve_blueprint(id)?;
@@ -10,8 +11,8 @@ pub fn run(cfg: &MemexConfig, id: &str) -> Result<()> {
         return Ok(());
     }
     std::fs::remove_file(&resolved.file_path)?;
-    git::commit(
-        &resolved.source.path,
+    commit_and_push(
+        resolved.source,
         &[&resolved.file_path],
         &format!("Delete blueprint: {id}"),
     )?;

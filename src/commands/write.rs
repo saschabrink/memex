@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use crate::commands::{reindex_one, resolve_content};
+use crate::commands::{commit_and_push, reindex_one, resolve_content};
 use crate::config::MemexConfig;
-use crate::git;
 
 pub fn run(cfg: &MemexConfig, id: &str, content_arg: &str) -> Result<()> {
     let content = resolve_content(content_arg.to_string())?;
@@ -14,8 +13,8 @@ pub fn run(cfg: &MemexConfig, id: &str, content_arg: &str) -> Result<()> {
     std::fs::write(&resolved.file_path, &content)?;
 
     let verb_past = if existed { "Rewrite" } else { "Add" };
-    git::commit(
-        &resolved.source.path,
+    commit_and_push(
+        resolved.source,
         &[&resolved.file_path],
         &format!("{verb_past} blueprint: {id}"),
     )?;

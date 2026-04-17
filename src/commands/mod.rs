@@ -1,9 +1,9 @@
-use anyhow::Result;
+use anyhow::{anyhow, Result};
 use std::io::Read;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use crate::config::{MemexConfig, Source};
-use crate::{db, indexer, refresh};
+use crate::config::{self, MemexConfig, Source};
+use crate::{db, git, indexer, refresh};
 
 pub mod broken_refs;
 pub mod delete;
@@ -32,6 +32,30 @@ pub fn resolve_content(content: String) -> Result<String> {
     }
 }
 
+/// Resolve the git repo that should receive commits for changes to a source.
+/// Walks up from the first existing path, or from the source's mount.
+pub fn commit_repo_for(source: &Source, paths: &[&Path]) -> Result<PathBuf> {
+    for p in paths {
+        if let Some(repo) = config::find_enclosing_repo(p) {
+            return Ok(repo);
+        }
+    }
+    config::find_enclosing_repo(&source.mount)
+        .ok_or_else(|| anyhow!("no git repo found for source '{}'", source.name))
+}
+
+/// Commit the given paths and, if the source has a remote, push best-effort.
+pub fn commit_and_push(source: &Source, paths: &[&Path], message: &str) -> Result<()> {
+    let repo = commit_repo_for(source, paths)?;
+    git::commit(&repo, paths, message)?;
+    if source.remote.is_some() {
+        if let Err(e) = git::push(&repo) {
+            eprintln!("warning: push of source '{}' failed: {e}", source.name);
+        }
+    }
+    Ok(())
+}
+
 pub fn reindex_one(cfg: &MemexConfig, source: &Source, file_path: &Path) -> Result<()> {
     let mut conn = db::connect(&cfg.db_path())?;
     db::setup(&conn)?;
@@ -44,7 +68,7 @@ pub fn reindex_one(cfg: &MemexConfig, source: &Source, file_path: &Path) -> Resu
         &cfg.blueprint_id(source, file_path),
         &cfg.extract_title(&content),
         &file_path.to_string_lossy(),
-        &cfg.blueprint_folder(source, file_path),
+        &source.name,
         &content,
         &hash,
         &emb,

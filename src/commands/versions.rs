@@ -1,5 +1,6 @@
 use anyhow::Result;
 
+use crate::commands::commit_repo_for;
 use crate::config::MemexConfig;
 use crate::git;
 
@@ -8,7 +9,8 @@ pub fn run(cfg: &MemexConfig, id: &str) -> Result<()> {
     if !resolved.file_path.exists() {
         return Ok(());
     }
-    let raw = git::log_file(&resolved.source.path, &resolved.file_path)?;
+    let repo = commit_repo_for(resolved.source, &[&resolved.file_path])?;
+    let raw = git::log_file(&repo, &resolved.file_path)?;
     for line in raw.lines() {
         if line.trim().is_empty() {
             continue;

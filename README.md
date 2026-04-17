@@ -6,10 +6,12 @@ Every write is automatically committed to git, so every blueprint has a full ver
 
 ## Highlights
 
+- **Blueprints are just markdown files in your project** — no hidden `.memex/` dump. Point memex at any folder structure you already have.
 - **Single binary**, no runtime, no `node_modules`.
 - **Fast cold start** (low tens of milliseconds).
-- **Self-healing index**: every `search` / `list` runs a SHA-256 staleness check and re-embeds any file that changed on disk (e.g. after `git pull` in a shared source).
+- **Self-healing index**: every `search` / `list` runs a SHA-256 staleness check and re-embeds anything that changed on disk.
 - **Pipe-friendly**: `echo "..." | memex write <id> -` reads content from stdin.
+- **Auto push** on write for sources that have a remote — no manual sync to keep shared blueprints up to date.
 
 ## Installation
 
@@ -19,7 +21,7 @@ Every write is automatically committed to git, so every blueprint has a full ver
 curl -sSL https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | bash
 ```
 
-This downloads the latest release binary to `~/.local/bin/memex`. Override the location with `MEMEX_INSTALL_DIR=/usr/local/bin`. Pin a specific version with `MEMEX_VERSION=v0.1.0`.
+This downloads the latest release binary to `~/.local/bin/memex`. Override the location with `MEMEX_INSTALL_DIR=/usr/local/bin`. Pin a specific version with `MEMEX_VERSION=v0.2.0`.
 
 Make sure `~/.local/bin` is on your `PATH`:
 
@@ -40,68 +42,118 @@ install -m 0755 target/release/memex ~/.local/bin/memex
 
 Requires Rust stable. If you use [Nix](https://nixos.org/), `nix develop` drops you into a shell with the right toolchain.
 
-### Updating
-
-Re-run the install script:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | bash
-```
-
-It always fetches the latest release and overwrites the existing binary.
-
 ## Quick start
 
-Create a `memex.toml` in your project (memex searches `./`, `./.memex/`, `./memex/`, and `./config/` for it):
+Create a `memex.toml` at your project root:
 
 ```toml
-[myapp]
-project = true
-folders = ["notes"]
+project_name = "myapp"
 
-[shared]
-remote = "https://github.com/your-org/shared-blueprints.git"
+[myapp]
+include = ["TODOS.md", "docs/**/*.md"]
+
+[phoenix-liveview]
+mount  = "docs/shared/phoenix-liveview"
+remote = "git@github.com:exfoundry/phoenix-liveview.git"
 ```
 
 Then:
 
 ```bash
-memex sync                           # clones the shared remote (first run only)
-memex write myapp/notes/ecto "# Ecto\n\nDatabase access patterns."
-memex list                           # list everything (triggers auto-reindex if anything changed)
+memex sync                           # clones the remote-backed sources
+memex write myapp/docs/vision "# Vision\n\nWhat we're building."
+memex list                           # lists everything
 memex search "database queries"      # semantic search
-memex read myapp/notes/ecto
+memex read myapp/docs/vision
 ```
 
 ## Configuration
 
 ### `memex.toml`
 
-Each top-level TOML section declares a blueprint **source** — a directory of markdown files with its own git history.
+Must live at the directory you invoke `memex` from (no upward search, no `config/`, no `.memex/`). Explicit and deterministic.
 
 ```toml
-[myapp]
-project = true                       # this source is project-specific (not shared)
-path = "./blueprints"                # optional; defaults to .memex/<name>
-folders = ["tech", "notes"]          # subfolders to index; ["."] = whole source
+project_name = "myapp"          # mandatory. identifies the index on disk.
+root = "."                      # optional. project root relative to memex.toml.
 
-[shared]
-remote = "https://github.com/org/shared-blueprints.git"
-                                     # cloned on `memex sync` to .memex/shared
+[<source_name>]
+mount   = "docs/something"      # optional. source dir relative to project root. Default: "."
+prefix  = "custom"              # optional. slug prefix. Default: source_name. "" allowed (at most one).
+include = ["**/*.md"]           # optional. glob patterns relative to mount. Default: ["**/*.md"].
+exclude = ["drafts/**"]         # optional.
+remote  = "git@..."             # optional. if mount doesn't exist, memex clones from here on `sync`.
 ```
 
-Fields:
+### Path resolution
 
-| Field | Required | Description |
-|---|---|---|
-| `path` | no | Directory holding the markdown. Defaults to `.memex/<name>`. Supports `~/`. |
-| `remote` | no | Git remote. If the source directory doesn't exist, `memex sync` clones from here. |
-| `folders` | no | Subfolders (relative to `path`) to index. Defaults to `["."]` (the entire source). |
-| `project` | no | `true` marks this source as project-specific. Affects `broken-refs` (a shared source cannot reference blueprints that only exist in project-specific sources). |
+- `root` is relative to the `memex.toml` directory. Absolute paths, `~/`, and `${ENV_VAR}` expansion are supported.
+- `mount` per source is relative to `root`. Same expansion rules.
+- `include` / `exclude` globs are relative to `mount`.
 
-### Blueprint IDs
+### Slug anatomy
 
-An ID is `<source_name>/<path-without-.md>`, e.g. `myapp/notes/ecto` refers to `.memex/myapp/notes/ecto.md`. IDs are the currency for every command — they're stable, they're what you paste into LLM prompts, and they double as the filesystem path.
+Every blueprint has an **id** (slug). Rule:
+
+```
+slug = <source.prefix>/<path-relative-to-mount-without-.md>
+```
+
+If `prefix = ""`, the `<prefix>/` part is omitted.
+
+Example layout:
+
+```
+~/Projects/myapp/
+  memex.toml
+  TODOS.md
+  docs/
+    vision.md
+    tech/
+      migrations.md
+    shared/
+      phoenix-liveview/         # cloned git repo (remote-backed source)
+        context.md
+```
+
+With this config:
+
+```toml
+project_name = "myapp"
+
+[myapp]
+include = ["TODOS.md", "docs/**/*.md"]
+
+[phoenix-liveview]
+mount  = "docs/shared/phoenix-liveview"
+remote = "git@github.com:exfoundry/phoenix-liveview.git"
+```
+
+You get these slugs:
+
+| File | Slug |
+|---|---|
+| `TODOS.md` | `myapp/TODOS` |
+| `docs/vision.md` | `myapp/docs/vision` |
+| `docs/tech/migrations.md` | `myapp/docs/tech/migrations` |
+| `docs/shared/phoenix-liveview/context.md` | `phoenix-liveview/context` |
+
+The shared source gets short, portable slugs (`phoenix-liveview/context`) — the same file will have the same slug in any project that mounts it, regardless of where.
+
+To drop the prefix for one source (e.g. a root-level notes source), set `prefix = ""`:
+
+```toml
+[notes]
+include = ["TODOs.md", "SCRATCH.md"]
+prefix  = ""
+# slug for TODOs.md → "TODOs"
+```
+
+### Foreign git repos
+
+Sources with a `remote` are cloned into their `mount` on `memex sync`. The mount directory gets added to the project's `.gitignore` automatically, so the clone is not tracked by the outer project.
+
+When memex enumerates a source, it skips any subtree that contains its own `.git/` (e.g. other cloned sources). This mirrors git-submodule semantics.
 
 ## Commands
 
@@ -117,13 +169,13 @@ memex <command> [args...] [--config <path>]
 | `memex read <id>` | Print full content (prepends `# <title>` if the blueprint's content doesn't start with one). |
 | `memex search <query> [--limit N]` | Semantic search. Default limit 5. Output: `<id>  [distance]  <title>`. |
 
-Both `list` and `search` run a SHA-256 staleness check first. Files that changed on disk since the last index write are re-embedded automatically. Files that disappeared are removed from the index. Files that didn't change cost a single hash comparison (~0.5ms each).
+Both `list` and `search` run a SHA-256 staleness check first. Files that changed on disk are re-embedded automatically. Files that disappeared are removed from the index.
 
 ### Writing
 
 | Command | Description |
 |---|---|
-| `memex write <id> <content>` | Create or overwrite. Commits to the source's git repo. `<content>` as `-` reads from stdin. |
+| `memex write <id> <content>` | Create or overwrite. Commits to the file's enclosing git repo. Pushes if the source has a `remote`. `<content>` as `-` reads from stdin. |
 | `memex edit <id> <old> <new>` | Literal find-and-replace (first occurrence). Commits and re-embeds. |
 | `memex delete <id>` | Delete file + remove from index. Commits. |
 | `memex move <old_id> <new_id>` | Rename or move between sources. Uses `git mv` inside a source; cross-source moves are write-then-delete with two commits. |
@@ -133,7 +185,7 @@ Every write op embeds the new content synchronously, so the index is always cons
 Because `<content>` is a shell argument, escape sequences like `\n` are passed literally. Use stdin for multi-line content:
 
 ```bash
-memex write myapp/notes/foo - <<'EOF'
+memex write myapp/docs/foo - <<'EOF'
 # Foo
 
 Multi-line
@@ -154,7 +206,16 @@ EOF
 |---|---|
 | `memex sync` | For each source with a `remote`: clone if missing, else `git pull` + `git push`. |
 | `memex rebuild-index` | Drop the index and rebuild from disk. Only needed after schema changes or index corruption — normal stale-check handles everything else. |
-| `memex broken-refs` | Find `[[slug]]` references in blueprint content that don't resolve to an existing blueprint. Shared sources may not reference project-specific blueprints. |
+| `memex broken-refs` | Find `[[slug]]` references in blueprint content that don't resolve to an existing blueprint. |
+
+### Cross-references
+
+Inside blueprint content, use `[[slug]]` to reference another blueprint. `broken-refs` considers a reference resolved if either:
+
+- **Full slug match** — e.g. `[[shared/phoenix-liveview/context]]` matches exactly that slug.
+- **Bare-name match** — a ref without slashes (e.g. `[[context]]`) matches any slug whose last path segment equals the ref. Convenient for short links inside a tightly-coupled set of blueprints.
+
+If multiple slugs share the same last segment, a bare ref is still considered resolved (ambiguity is not flagged). Use the full slug when you need to disambiguate.
 
 ## How it works
 
@@ -162,42 +223,28 @@ EOF
 
 Memex embeds blueprint content using [`all-MiniLM-L6-v2`](https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2) (384-dim, ONNX, ~87MB). The model runs locally via [fastembed-rs](https://github.com/Anush008/fastembed-rs), which wraps [ONNX Runtime](https://onnxruntime.ai/). Mean pooling and L2 normalization are applied automatically — similarity is cosine.
 
-Search is a full table scan with in-memory cosine computation. At the scale memex targets (hundreds to low thousands of blueprints), this is well under 50ms per query. If you ever cross into tens of thousands, the right answer is to plug in `sqlite-vec` — until then it's premature.
+Search is a full table scan with in-memory cosine computation. At the scale memex targets (hundreds to low thousands of blueprints), this is well under 50ms per query.
 
 ### Storage layout
 
-Per-project:
+- **Blueprint files**: live in your project, wherever you point `mount` at. Committed to whichever git repo encloses them (your project repo, or a cloned remote source).
+- **Vector index**: `~/Library/Caches/memex/indexes/<project_name>/vector_index.sqlite` on macOS, `$XDG_CACHE_HOME/memex/indexes/<project_name>/` on Linux. Regenerable from source files with `memex rebuild-index`.
+- **Model cache** (downloaded once, shared across projects):
+  - macOS: `~/Library/Caches/memex/models/`
+  - Linux: `$XDG_CACHE_HOME/memex/models/` (defaults to `~/.cache/memex/models/`)
 
-```
-<projectDir>/
-  config/memex.toml               # or memex.toml, .memex/memex.toml
-  .memex/
-    vector_index.sqlite           # blueprints + embeddings (schema v2)
-    <source_name>/                # each source is a standalone git repo
-      .git/
-      .gitignore                  # ignores .db/
-      notes/*.md
-```
-
-The SQLite index lives under the project. Blueprint files and their git history live in the source directories, which can be shared across projects (e.g. point two projects at the same `shared/` clone and they both index it).
-
-### Model cache (downloaded once, shared across projects)
-
-- **macOS**: `~/Library/Caches/memex/models/`
-- **Linux**: `$XDG_CACHE_HOME/memex/models/` (defaults to `~/.cache/memex/models/`)
+The index lives in the OS cache directory because it's cheap to rebuild. If you delete a project, its index will eventually get cleaned up by the OS.
 
 ### Stale-index check
 
 On every `search` and `list`:
 
-1. Enumerate all blueprint files on disk (per source's configured folders).
+1. Enumerate all blueprint files on disk (per source's globs, skipping foreign git subtrees).
 2. Compute SHA-256 of each file's bytes.
 3. Compare against `content_hash` stored in the index.
 4. Re-embed files whose hash changed (batched in one ONNX call). Delete index entries whose file disappeared.
 
-In the steady state (nothing changed), this is ~10ms for a few dozen blueprints — fast enough to run unconditionally. When files *have* changed, only those specific files are re-embedded.
-
-This is what fixes the "I pulled the shared repo but search still returns old results" failure mode.
+In the steady state, this is ~10ms for a few dozen blueprints — fast enough to run unconditionally.
 
 ## Development
 
@@ -206,8 +253,9 @@ Requires [Nix](https://nixos.org/) with flakes, or a system-wide Rust toolchain.
 ```bash
 nix develop                  # enters shell with rustc, cargo, cmake, pkg-config
 cargo build                  # debug build
-cargo build --release        # release build (~20s, 28MB binary)
-cargo check                  # fast type-check without codegen
+cargo build --release        # release build
+cargo test                   # fast tests
+cargo test -- --ignored      # tests that exercise the embedder (~87MB model download on first run)
 ```
 
 Run against an existing project:

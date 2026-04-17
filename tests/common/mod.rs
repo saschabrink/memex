@@ -11,7 +11,8 @@ static COUNTER: AtomicU64 = AtomicU64::new(0);
 pub struct TestEnv {
     pub tmp_dir: PathBuf,
     pub project_dir: PathBuf,
-    pub source_dir: PathBuf,
+    /// Absolute mount path of the `testsource` source.
+    pub source_mount: PathBuf,
     pub cfg: MemexConfig,
 }
 
@@ -21,22 +22,27 @@ impl Drop for TestEnv {
     }
 }
 
+/// Create a test project containing one source (`testsource`) mounted at
+/// `<project>/blueprints`. The project root is a git repo (for commits).
 pub fn create_env() -> TestEnv {
     let tmp_dir = mk_tmp("memex-test-");
     let project_dir = tmp_dir.join("project");
-    let source_dir = tmp_dir.join("source");
     std::fs::create_dir_all(&project_dir).unwrap();
-    std::fs::create_dir_all(source_dir.join("test").join("tech")).unwrap();
 
-    git_init(&source_dir);
+    // Project is a git repo so commits work.
+    git_init(&project_dir);
+
+    let source_mount = project_dir.join("blueprints");
+    std::fs::create_dir_all(&source_mount).unwrap();
 
     let config_path = project_dir.join("memex.toml");
     std::fs::write(
         &config_path,
-        format!(
-            "[testsource]\npath = \"{}\"\nfolders = [\"test/tech\"]\n",
-            source_dir.display()
-        ),
+        r#"project_name = "testproject"
+
+[testsource]
+mount = "blueprints"
+"#,
     )
     .unwrap();
 
@@ -46,7 +52,7 @@ pub fn create_env() -> TestEnv {
     TestEnv {
         tmp_dir,
         project_dir,
-        source_dir,
+        source_mount,
         cfg,
     }
 }

@@ -8,7 +8,14 @@ pub fn run(cfg: &MemexConfig, id: &str) -> Result<()> {
     db::setup(&conn)?;
     match db::get(&conn, id)? {
         Some(row) => {
-            println!("# {}\n\n{}", row.title, row.content);
+            if row.content.trim_start().starts_with("# ") {
+                print!("{}", row.content);
+                if !row.content.ends_with('\n') {
+                    println!();
+                }
+            } else {
+                println!("# {}\n\n{}", row.title, row.content);
+            }
             Ok(())
         }
         None => {

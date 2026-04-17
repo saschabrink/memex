@@ -9,7 +9,7 @@ pub fn run(cfg: &MemexConfig, query: &str, limit: usize) -> Result<()> {
     refresh::refresh(cfg, &mut conn)?;
     let embedder = indexer::Embedder::new()?;
     let q = embedder.embed_one(query)?;
-    let results = db::search(&conn, &q, &cfg.all_folders(), limit)?;
+    let results = db::search(&conn, &q, &cfg.all_source_names(), limit)?;
     for r in results {
         println!("{}  [{:.3}]  {}", r.id, r.distance, r.title);
     }

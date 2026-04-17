@@ -1,8 +1,7 @@
 use anyhow::Result;
 
-use crate::commands::reindex_one;
+use crate::commands::{commit_and_push, reindex_one};
 use crate::config::MemexConfig;
-use crate::git;
 
 pub fn run(cfg: &MemexConfig, id: &str, old: &str, new: &str) -> Result<()> {
     let resolved = cfg.resolve_blueprint(id)?;
@@ -17,8 +16,8 @@ pub fn run(cfg: &MemexConfig, id: &str, old: &str, new: &str) -> Result<()> {
     }
     let updated = content.replacen(old, new, 1);
     std::fs::write(&resolved.file_path, &updated)?;
-    git::commit(
-        &resolved.source.path,
+    commit_and_push(
+        resolved.source,
         &[&resolved.file_path],
         &format!("Update blueprint: {id}"),
     )?;
