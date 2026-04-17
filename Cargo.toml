@@ -1,0 +1,21 @@
+[package]
+name = "memex"
+version = "0.1.0"
+edition = "2021"
+description = "Personal knowledge base CLI with local semantic search."
+license = "MIT"
+repository = "https://github.com/exfoundry/memex"
+
+[[bin]]
+name = "memex"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+dirs = "6"
+fastembed = "4"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1", features = ["derive"] }
+sha2 = "0.10"
+toml = "0.8"
