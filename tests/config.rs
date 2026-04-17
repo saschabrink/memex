@@ -682,3 +682,103 @@ mount = "blueprints"
     assert_eq!(files.len(), 1, "got: {files:?}");
     assert!(files[0].ends_with("CLAUDE.md"));
 }
+
+// ---------- enumerate_source_with_diagnostics ----------
+
+#[test]
+fn diagnostics_reports_foreign_git_skip() {
+    use memex::config::SkipReason;
+
+    let dir = mk_tmp("memex-diag-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[deps]
+mount = "deps"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("deps").join("foreign").join(".git")).unwrap();
+    std::fs::write(dir.join("deps").join("foreign").join("README.md"), "x").unwrap();
+    std::fs::write(dir.join("deps").join("plain.md"), "y").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let diag = config::enumerate_source_with_diagnostics(&cfg.sources[0]).unwrap();
+
+    assert_eq!(diag.matched.len(), 1, "matched: {:?}", diag.matched);
+    assert!(diag.matched[0].ends_with("plain.md"));
+    assert_eq!(diag.skipped.len(), 1, "skipped: {:?}", diag.skipped);
+    assert_eq!(diag.skipped[0].reason, SkipReason::ForeignGit);
+    assert!(diag.skipped[0].rel_path.ends_with("foreign"));
+}
+
+#[test]
+fn diagnostics_reports_noise_dir_skip() {
+    use memex::config::SkipReason;
+
+    let dir = mk_tmp("memex-diag-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src").join("node_modules").join("lib")).unwrap();
+    std::fs::create_dir_all(dir.join("src").join("_build")).unwrap();
+    std::fs::write(
+        dir.join("src").join("node_modules").join("lib").join("x.md"),
+        "a",
+    )
+    .unwrap();
+    std::fs::write(dir.join("src").join("_build").join("y.md"), "b").unwrap();
+    std::fs::write(dir.join("src").join("ok.md"), "c").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let diag = config::enumerate_source_with_diagnostics(&cfg.sources[0]).unwrap();
+
+    assert_eq!(diag.matched.len(), 1);
+    assert!(diag.matched[0].ends_with("ok.md"));
+    let names: Vec<_> = diag
+        .skipped
+        .iter()
+        .map(|s| match s.reason {
+            SkipReason::NoiseDir(n) => n,
+            _ => "other",
+        })
+        .collect();
+    assert!(names.contains(&"node_modules"), "got: {names:?}");
+    assert!(names.contains(&"_build"), "got: {names:?}");
+}
+
+#[test]
+fn diagnostics_reports_exclude_glob_skip() {
+    use memex::config::SkipReason;
+
+    let dir = mk_tmp("memex-diag-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+exclude = ["drafts/**"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src").join("drafts")).unwrap();
+    std::fs::write(dir.join("src").join("drafts").join("wip.md"), "a").unwrap();
+    std::fs::write(dir.join("src").join("keep.md"), "b").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let diag = config::enumerate_source_with_diagnostics(&cfg.sources[0]).unwrap();
+
+    assert_eq!(diag.matched.len(), 1);
+    assert!(diag.matched[0].ends_with("keep.md"));
+    assert_eq!(diag.skipped.len(), 1);
+    assert_eq!(diag.skipped[0].reason, SkipReason::ExcludeGlob);
+    assert!(diag.skipped[0].rel_path.ends_with("wip.md"));
+}

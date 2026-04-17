@@ -539,6 +539,114 @@ fn enumerate_source(source: &Source) -> Result<Vec<PathBuf>> {
     Ok(out)
 }
 
+/// Why a path was skipped during enumeration. Surfaced by `memex doctor`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SkipReason {
+    /// Directory contains its own `.git/` — treated as a foreign repo.
+    ForeignGit,
+    /// Directory name matches a hardcoded noise pattern.
+    NoiseDir(&'static str),
+    /// File matched an `exclude` glob.
+    ExcludeGlob,
+}
+
+#[derive(Debug, Clone)]
+pub struct SkipEntry {
+    /// Path relative to the source mount.
+    pub rel_path: PathBuf,
+    pub reason: SkipReason,
+}
+
+#[derive(Debug, Default)]
+pub struct EnumDiagnostics {
+    pub matched: Vec<PathBuf>,
+    pub skipped: Vec<SkipEntry>,
+}
+
+/// Same walk as `enumerate_source`, but returns reasons for every skip.
+/// Used by `memex doctor` to explain what the walker saw.
+pub fn enumerate_source_with_diagnostics(source: &Source) -> Result<EnumDiagnostics> {
+    if !source.mount.exists() {
+        return Ok(EnumDiagnostics::default());
+    }
+    let include = source.include_set()?;
+    let exclude = source.exclude_set()?;
+
+    let skipped: std::cell::RefCell<Vec<SkipEntry>> = std::cell::RefCell::new(Vec::new());
+
+    let walker = walkdir::WalkDir::new(&source.mount)
+        .into_iter()
+        .filter_entry(|e| {
+            let p = e.path();
+            if p == source.mount {
+                return true;
+            }
+            if e.file_type().is_dir() {
+                let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+                    return true;
+                };
+                if name == ".git" {
+                    return false;
+                }
+                let noise = match name {
+                    "node_modules" => Some("node_modules"),
+                    "target" => Some("target"),
+                    "_build" => Some("_build"),
+                    ".next" => Some(".next"),
+                    _ => None,
+                };
+                if let Some(n) = noise {
+                    let rel = p.strip_prefix(&source.mount).unwrap_or(p).to_path_buf();
+                    skipped.borrow_mut().push(SkipEntry {
+                        rel_path: rel,
+                        reason: SkipReason::NoiseDir(n),
+                    });
+                    return false;
+                }
+                if p.join(".git").exists() {
+                    let rel = p.strip_prefix(&source.mount).unwrap_or(p).to_path_buf();
+                    skipped.borrow_mut().push(SkipEntry {
+                        rel_path: rel,
+                        reason: SkipReason::ForeignGit,
+                    });
+                    return false;
+                }
+            }
+            true
+        });
+
+    let mut matched = Vec::new();
+    for entry in walker {
+        let Ok(entry) = entry else { continue };
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+            continue;
+        }
+        let rel = match path.strip_prefix(&source.mount) {
+            Ok(r) => r,
+            Err(_) => continue,
+        };
+        if !include.is_match(rel) {
+            continue;
+        }
+        if !exclude.is_empty() && exclude.is_match(rel) {
+            skipped.borrow_mut().push(SkipEntry {
+                rel_path: rel.to_path_buf(),
+                reason: SkipReason::ExcludeGlob,
+            });
+            continue;
+        }
+        matched.push(path.to_path_buf());
+    }
+    matched.sort();
+    let mut skipped = skipped.into_inner();
+    skipped.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+    Ok(EnumDiagnostics { matched, skipped })
+}
+
 /// Walk up from `start` until a directory containing `.git/` is found.
 /// Returns the repo root, or None.
 pub fn find_enclosing_repo(start: &Path) -> Option<PathBuf> {

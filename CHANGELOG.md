@@ -5,6 +5,35 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-17
+
+Per-source diagnostics. Answers "why isn't my blueprint showing up?"
+without reading the source — `memex doctor` walks every source the same
+way the indexer does, then reports what was found and what was skipped,
+with reasons.
+
+### Added
+- `memex doctor` — per-source diagnostic report. For each source it
+  prints: mount existence and indexed-file count; skipped subtrees with
+  reasons (foreign `.git/`, noise dirs like `node_modules` / `target` /
+  `_build` / `.next`, `exclude`-glob hits); prefix / include / exclude /
+  `index_filename` / `readonly` flags when non-default; remote
+  reachability via `git ls-remote` with a 5-second ceiling and no
+  interactive prompts. Also reports `also_scan` matches (cap 10) and the
+  index-file path + size. Exits 1 if any mount is missing or any remote
+  is unreachable, so `doctor` is CI-usable.
+- `config::enumerate_source_with_diagnostics()` — library-level primitive
+  that drives `doctor`. Returns `EnumDiagnostics { matched, skipped }`,
+  where each `SkipEntry` carries a `SkipReason` (`ForeignGit`,
+  `NoiseDir(&'static str)`, `ExcludeGlob`).
+
+### Rationale
+Foreign-`.git/` subtrees are silently excluded during normal enumeration
+— correct behaviour (they're someone else's repo), but indistinguishable
+from "your config is wrong" at the user level. `doctor` surfaces these
+decisions explicitly so the fix (remove the nested `.git/`, or live with
+the skip) is obvious.
+
 ## [0.6.0] - 2026-04-17
 
 Two doc-hygiene improvements: an annotated `memex.toml` example shipped

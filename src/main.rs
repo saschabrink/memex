@@ -71,6 +71,15 @@ enum Command {
         claude_hook: bool,
     },
     #[command(
+        about = "Per-source diagnostics: mounts, skips, remotes, index size.",
+        long_about = "Walks every source the same way normal enumeration does, but \
+                      reports what was found and what was skipped (with reasons). \
+                      Useful when a blueprint seems to be missing — `doctor` explains why. \
+                      Also checks remote reachability (5s timeout) and prints index file size. \
+                      Exits non-zero if any mount is missing or any remote unreachable."
+    )]
+    Doctor,
+    #[command(
         about = "Print a fully annotated memex.toml example.",
         long_about = "Prints the annotated memex.toml example embedded in this binary. \
                       Use to bootstrap a project (`memex example-config > memex.toml`) \
@@ -111,6 +120,7 @@ fn main() -> Result<()> {
         Command::Versions { id } => commands::versions::run(&cfg, &id),
         Command::Diff { id, hash } => commands::diff::run(&cfg, &id, &hash),
         Command::BrokenRefs => commands::broken_refs::run(&cfg),
+        Command::Doctor => commands::doctor::run(&cfg),
         Command::Sync => commands::sync::run(&cfg),
         Command::HookAdvice {
             file,

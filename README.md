@@ -230,6 +230,7 @@ EOF
 | `memex sync` | For each source with a `remote`: clone if missing, else `git pull --ff-only` (+ `git push` for writable sources). Never merges or rebases. |
 | `memex rebuild-index` | Drop the index and rebuild from disk. Only needed after schema changes or index corruption — normal stale-check handles everything else. |
 | `memex broken-refs` | Find `[[slug]]` references that don't resolve — in blueprints, `hooks.toml`, and any external files listed under `also_scan`. |
+| `memex doctor` | Per-source diagnostics: mount existence, file counts, skipped subtrees with reasons (foreign `.git/`, noise dirs, `exclude` globs), remote reachability (5s timeout), index size. Exits non-zero if a mount is missing or a remote is unreachable — CI-usable. |
 | `memex hook-advice <file> --event pre-write\|post-write [--claude-hook]` | Look up matching hooks for `<file>`. See [Hooks](#hooks). |
 | `memex agent-instructions [--claude-hook]` | Print generic usage instructions for LLM agents. Does not require a `memex.toml`. See [Agent onboarding](#agent-onboarding). |
 
@@ -453,9 +454,6 @@ Tracked milestones toward a 1.0 stable release. Not promises — directions. Ope
 
 ### CI on every push and PR
 Today, tests, `clippy`, and `fmt` only run when a release tag is pushed. They should gate every commit to `main` and every PR. Low-effort, high-trust payoff — until then, "green" only means the last release built.
-
-### `memex doctor`
-A single command that explains, per source, what memex sees: mount resolves to this path, N files matched, M files skipped because of a foreign `.git/` subtree or an `exclude` glob, remote reachable, no permission issues. Today, silent skips are the #1 source of "why isn't this blueprint showing up?" support questions. Doctor replaces that with a printed answer.
 
 ### Shell completions
 `memex completions bash|zsh|fish|elvish` emitting completion scripts via `clap_complete`. Tab-complete for slugs (from the index), commands, and flags. Standard for modern CLIs, currently missing.

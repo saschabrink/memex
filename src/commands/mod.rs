@@ -9,6 +9,7 @@ pub mod agent_instructions;
 pub mod broken_refs;
 pub mod delete;
 pub mod diff;
+pub mod doctor;
 pub mod edit;
 pub mod example_config;
 pub mod hook_advice;
