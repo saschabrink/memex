@@ -42,6 +42,12 @@ pub struct MemexConfig {
     pub project_root: PathBuf,
     pub config_path: PathBuf,
     pub sources: Vec<Source>,
+    /// Globs (relative to `project_root`) of external files that should be
+    /// scanned for `[[slug]]` references during `broken-refs`, without being
+    /// indexed as blueprints. Intended for `CLAUDE.md`, `AGENTS.md`,
+    /// `.claude/**/*.md`, etc. — files that *reference* the KB but don't
+    /// belong in it.
+    pub also_scan: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -185,6 +191,53 @@ impl MemexConfig {
         self.sources.iter().find(|s| s.name == name)
     }
 
+    /// Resolve `also_scan` globs against `project_root` into concrete files.
+    /// Returns a deduplicated list. Skips nonexistent paths silently — the
+    /// feature is opt-in and tolerant of missing files (e.g. a project
+    /// without a `CLAUDE.md`).
+    pub fn also_scan_files(&self) -> Result<Vec<PathBuf>> {
+        if self.also_scan.is_empty() {
+            return Ok(Vec::new());
+        }
+        let set = build_globset(&self.also_scan)?;
+        let mut out = BTreeMap::<PathBuf, ()>::new();
+        let walker = walkdir::WalkDir::new(&self.project_root)
+            .into_iter()
+            .filter_entry(|e| {
+                let p = e.path();
+                if p == self.project_root {
+                    return true;
+                }
+                if e.file_type().is_dir() {
+                    let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
+                        return true;
+                    };
+                    if matches!(
+                        name,
+                        ".git" | "node_modules" | "target" | "_build" | ".next" | "deps"
+                    ) {
+                        return false;
+                    }
+                }
+                true
+            });
+        for entry in walker {
+            let Ok(entry) = entry else { continue };
+            if !entry.file_type().is_file() {
+                continue;
+            }
+            let path = entry.path();
+            let rel = match path.strip_prefix(&self.project_root) {
+                Ok(r) => r,
+                Err(_) => continue,
+            };
+            if set.is_match(rel) {
+                out.insert(path.to_path_buf(), ());
+            }
+        }
+        Ok(out.into_keys().collect())
+    }
+
     pub fn extract_title(&self, content: &str) -> String {
         for line in content.lines() {
             if let Some(rest) = line.strip_prefix("# ") {
@@ -273,6 +326,8 @@ struct RawConfig {
     project_name: String,
     #[serde(default = "default_root")]
     root: String,
+    #[serde(default)]
+    also_scan: Vec<String>,
     #[serde(flatten)]
     sources: BTreeMap<String, RawSource>,
 }
@@ -366,6 +421,7 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
         project_root,
         config_path,
         sources,
+        also_scan: raw.also_scan,
     })
 }
 

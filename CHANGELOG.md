@@ -5,6 +5,31 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-04-17
+
+Doc-hygiene primitive: `broken-refs` now also scans external files for
+`[[slug]]` references, catching drift in `CLAUDE.md`, `AGENTS.md`, and
+similar agent-briefing files that live outside the blueprint sources.
+
+### Added
+- `also_scan = ["CLAUDE.md", ".claude/**/*.md", ...]` in `memex.toml` —
+  top-level glob list (relative to `project_root`). Files matched are
+  scanned for `[[slug]]` references during `broken-refs` and reported with
+  their relative path as origin. They are NOT indexed as blueprints — no
+  slugs produced, no search hits, no collisions. Tolerant of missing
+  files: configuring `CLAUDE.md` when none exists is a no-op.
+- Noise directories (`.git`, `node_modules`, `target`, `_build`, `.next`,
+  `deps`) are skipped during `also_scan` walk, so a project-root glob like
+  `**/*.md` stays fast and doesn't accidentally scan dep markdown.
+
+### Rationale
+Agent-brief files (`CLAUDE.md`, `AGENTS.md`, role docs) routinely reference
+blueprints but aren't blueprints themselves. Without this, references drift
+silently when blueprints are renamed or deleted. Adding them as a
+`readonly` source would pollute `memex list` / `memex search` with
+non-blueprint content; `also_scan` keeps them out of the KB while still
+validating their links.
+
 ## [0.4.0] - 2026-04-17
 
 Agent-onboarding primitives and per-dependency blueprints. Prebuilt Linux

@@ -572,3 +572,113 @@ prefix = "shared"
     let err = cfg.ensure_initialized().unwrap_err().to_string();
     assert!(err.contains("slug collision"), "got: {err}");
 }
+
+// ---------- also_scan ----------
+
+#[test]
+fn also_scan_defaults_to_empty() {
+    let env = create_env();
+    assert!(env.cfg.also_scan.is_empty());
+    assert!(env.cfg.also_scan_files().unwrap().is_empty());
+}
+
+#[test]
+fn also_scan_resolves_top_level_file() {
+    let dir = mk_tmp("memex-alsoscan-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+also_scan = ["CLAUDE.md"]
+
+[s]
+mount = "blueprints"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("blueprints")).unwrap();
+    std::fs::write(dir.join("CLAUDE.md"), "# intentionally non-blueprint\n").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let files = cfg.also_scan_files().unwrap();
+    assert_eq!(files.len(), 1);
+    assert!(files[0].ends_with("CLAUDE.md"));
+}
+
+#[test]
+fn also_scan_ignores_missing_files() {
+    let dir = mk_tmp("memex-alsoscan-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+also_scan = ["CLAUDE.md", "AGENTS.md"]
+
+[s]
+mount = "blueprints"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("blueprints")).unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let files = cfg.also_scan_files().unwrap();
+    assert!(files.is_empty(), "expected no files, got {files:?}");
+}
+
+#[test]
+fn also_scan_supports_glob_patterns() {
+    let dir = mk_tmp("memex-alsoscan-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+also_scan = [".claude/**/*.md"]
+
+[s]
+mount = "blueprints"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("blueprints")).unwrap();
+    std::fs::create_dir_all(dir.join(".claude").join("skills")).unwrap();
+    std::fs::write(dir.join(".claude").join("open-questions.md"), "x").unwrap();
+    std::fs::write(
+        dir.join(".claude").join("skills").join("commit.md"),
+        "y",
+    )
+    .unwrap();
+    std::fs::write(dir.join("CLAUDE.md"), "z").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let mut files = cfg.also_scan_files().unwrap();
+    files.sort();
+    assert_eq!(files.len(), 2, "got: {files:?}");
+    assert!(files.iter().any(|f| f.ends_with("open-questions.md")));
+    assert!(files.iter().any(|f| f.ends_with("commit.md")));
+}
+
+#[test]
+fn also_scan_skips_noise_directories() {
+    let dir = mk_tmp("memex-alsoscan-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+also_scan = ["**/*.md"]
+
+[s]
+mount = "blueprints"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("blueprints")).unwrap();
+    std::fs::create_dir_all(dir.join("node_modules").join("foo")).unwrap();
+    std::fs::create_dir_all(dir.join("deps").join("ecto")).unwrap();
+    std::fs::create_dir_all(dir.join("_build")).unwrap();
+    std::fs::write(dir.join("node_modules").join("foo").join("x.md"), "a").unwrap();
+    std::fs::write(dir.join("deps").join("ecto").join("README.md"), "b").unwrap();
+    std::fs::write(dir.join("_build").join("c.md"), "c").unwrap();
+    std::fs::write(dir.join("CLAUDE.md"), "d").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let files = cfg.also_scan_files().unwrap();
+    assert_eq!(files.len(), 1, "got: {files:?}");
+    assert!(files[0].ends_with("CLAUDE.md"));
+}

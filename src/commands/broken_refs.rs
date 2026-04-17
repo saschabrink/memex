@@ -85,6 +85,36 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
         check_hook(hook, "post-write", &mut any);
     }
 
+    // Scan external files listed in `also_scan` (e.g. CLAUDE.md, AGENTS.md).
+    // These files reference blueprints but are not indexed themselves.
+    for file in cfg.also_scan_files()? {
+        let content = match std::fs::read_to_string(&file) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        let slugs = links::extract(&content);
+        let unresolved: Vec<String> = slugs
+            .into_iter()
+            .filter(|s| {
+                if all_slugs.contains(s) {
+                    return false;
+                }
+                if !s.contains('/') && tails.contains(s.as_str()) {
+                    return false;
+                }
+                true
+            })
+            .collect();
+        if !unresolved.is_empty() {
+            any = true;
+            let rel = file
+                .strip_prefix(&cfg.project_root)
+                .unwrap_or(&file)
+                .display();
+            println!("{rel}: {}", unresolved.join(", "));
+        }
+    }
+
     if !any {
         println!("No broken references found.");
     }

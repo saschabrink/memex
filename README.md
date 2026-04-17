@@ -229,7 +229,7 @@ EOF
 |---|---|
 | `memex sync` | For each source with a `remote`: clone if missing, else `git pull --ff-only` (+ `git push` for writable sources). Never merges or rebases. |
 | `memex rebuild-index` | Drop the index and rebuild from disk. Only needed after schema changes or index corruption — normal stale-check handles everything else. |
-| `memex broken-refs` | Find `[[slug]]` references in blueprints, and `blueprint`/`blueprints` entries in `hooks.toml`, that don't resolve. |
+| `memex broken-refs` | Find `[[slug]]` references that don't resolve — in blueprints, `hooks.toml`, and any external files listed under `also_scan`. |
 | `memex hook-advice <file> --event pre-write\|post-write [--claude-hook]` | Look up matching hooks for `<file>`. See [Hooks](#hooks). |
 | `memex agent-instructions [--claude-hook]` | Print generic usage instructions for LLM agents. Does not require a `memex.toml`. See [Agent onboarding](#agent-onboarding). |
 
@@ -241,6 +241,21 @@ Inside blueprint content, use `[[slug]]` to reference another blueprint. `broken
 - **Bare-name match** — a ref without slashes (e.g. `[[context]]`) matches any slug whose last path segment equals the ref. Convenient for short links inside a tightly-coupled set of blueprints.
 
 If multiple slugs share the same last segment, a bare ref is still considered resolved (ambiguity is not flagged). Use the full slug when you need to disambiguate.
+
+### Checking external files (`also_scan`)
+
+Agent-brief files like `CLAUDE.md`, `AGENTS.md`, or per-tool docs under `.claude/` typically reference blueprints but aren't blueprints themselves. Add them to `also_scan` in `memex.toml` (top-level, not per-source) and `broken-refs` will include them without indexing them:
+
+```toml
+project_name = "myproject"
+also_scan = ["CLAUDE.md", "AGENTS.md", ".claude/**/*.md"]
+
+[shared]
+mount  = "docs/shared"
+remote = "..."
+```
+
+Paths are globs relative to `project_root`. Matched files are scanned for `[[slug]]` references; no slugs are produced, no collisions, no search hits. Missing files are silently ignored, so configuring `CLAUDE.md` on a project without one is a no-op. Noise directories (`.git`, `node_modules`, `target`, `_build`, `.next`, `deps`) are skipped during the walk.
 
 ## Agent onboarding
 
