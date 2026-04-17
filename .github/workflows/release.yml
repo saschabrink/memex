@@ -13,15 +13,23 @@ env:
 
 jobs:
   build:
-    name: build aarch64-apple-darwin
-    runs-on: macos-14
+    name: build ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: aarch64-apple-darwin
+            os: macos-14
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Install Rust
         run: |
           rustup toolchain install stable --profile minimal
-          rustup target add aarch64-apple-darwin
+          rustup target add ${{ matrix.target }}
 
       - name: Cache cargo
         uses: actions/cache@v4
@@ -30,21 +38,21 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: cargo-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          key: cargo-${{ runner.os }}-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
 
       - name: Build release binary
-        run: cargo build --release --target aarch64-apple-darwin
+        run: cargo build --release --target ${{ matrix.target }}
 
       - name: Package
         run: |
-          cd target/aarch64-apple-darwin/release
-          tar czf memex-aarch64-apple-darwin.tar.gz memex
-          shasum -a 256 memex-aarch64-apple-darwin.tar.gz > memex-aarch64-apple-darwin.tar.gz.sha256
+          cd target/${{ matrix.target }}/release
+          tar czf memex-${{ matrix.target }}.tar.gz memex
+          shasum -a 256 memex-${{ matrix.target }}.tar.gz > memex-${{ matrix.target }}.tar.gz.sha256
 
       - name: Upload to release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/aarch64-apple-darwin/release/memex-aarch64-apple-darwin.tar.gz
-            target/aarch64-apple-darwin/release/memex-aarch64-apple-darwin.tar.gz.sha256
+            target/${{ matrix.target }}/release/memex-${{ matrix.target }}.tar.gz
+            target/${{ matrix.target }}/release/memex-${{ matrix.target }}.tar.gz.sha256
           generate_release_notes: true

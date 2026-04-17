@@ -66,6 +66,41 @@ pub fn pull(repo_dir: &Path) -> Result<String> {
     }
 }
 
+/// Fast-forward-only pull. Fails loudly on divergence (never merges or rebases).
+pub fn pull_ff_only(repo_dir: &Path) -> Result<String> {
+    let tracking = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .args(["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"])
+        .output()?;
+    if !tracking.status.success() {
+        return Ok("No upstream — skipped.".to_string());
+    }
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .args(["pull", "--ff-only"])
+        .output()?;
+    if !out.status.success() {
+        bail!(
+            "{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    if stdout.contains("Already up to date") {
+        Ok("up to date".to_string())
+    } else {
+        // Keep a short summary line for readable output.
+        let first = stdout.lines().next().unwrap_or("").trim();
+        if first.is_empty() {
+            Ok("updated".to_string())
+        } else {
+            Ok(format!("updated ({first})"))
+        }
+    }
+}
+
 pub fn push(repo_dir: &Path) -> Result<String> {
     let out = Command::new("git")
         .arg("-C")

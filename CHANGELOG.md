@@ -5,6 +5,32 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-04-17
+
+Agent-onboarding primitives and per-dependency blueprints. Prebuilt Linux
+binaries. `memex sync` is now safer by default (fast-forward only).
+
+### Added
+- `memex agent-instructions [--claude-hook]` — prints a generic,
+  project-agnostic usage brief for LLM agents. With `--claude-hook`, emits a
+  Claude Code `SessionStart` hook JSON envelope so the brief is delivered as
+  `additionalContext` at session start. Does not require a `memex.toml`.
+- Source option `index_filename = "<name>"` — files with this name represent
+  their parent directory as a slug. `deps/ecto_context/usage-rules.md` becomes
+  slug `deps/ecto_context`. Intended for indexing per-package usage rules
+  shipped via Hex. Within-source slug collisions are detected at load time.
+- Prebuilt release binary for `x86_64-unknown-linux-gnu`. Release workflow now
+  runs as a matrix across macOS arm64 and Linux x86_64.
+- `install.sh` auto-detects OS/arch and picks the matching artifact.
+
+### Changed
+- `memex sync` now uses `git pull --ff-only`. Divergent branches are reported
+  as an error for that source but do not abort the overall sync. Readonly
+  sources skip the push step entirely.
+- Slug collision detection now catches conflicts within a single source (not
+  just across sources). Necessary because `index_filename` can produce a slug
+  that coincides with a normal `.md` slug in the same source.
+
 ## [0.3.0] - 2026-04-17
 
 Hook infrastructure for deterministic, file-pattern-based context injection

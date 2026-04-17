@@ -17,6 +17,11 @@ pub struct Source {
     /// Read-only sources reject `write`/`edit`/`delete`/`move` and show
     /// a `(read-only)` title suffix in `list`/`search`.
     pub readonly: bool,
+    /// Filename that represents its parent directory. Files with this name
+    /// use the parent directory's relative path as their slug base, so
+    /// `deps/ecto_context/usage-rules.md` with `index_filename = "usage-rules.md"`
+    /// becomes slug `deps/ecto_context`. Like `index.html` or `mod.rs`.
+    pub index_filename: Option<String>,
 }
 
 impl Source {
@@ -62,11 +67,26 @@ impl MemexConfig {
             .unwrap_or(file_path)
             .to_string_lossy()
             .replace('\\', "/");
-        let stripped = rel.strip_suffix(".md").unwrap_or(&rel);
-        if source.prefix.is_empty() {
-            stripped.to_string()
-        } else {
-            format!("{}/{}", source.prefix, stripped)
+
+        // If this file matches the source's `index_filename`, its slug base is
+        // the parent directory's relative path (may be empty for mount-root).
+        let slug_base: String = match (&source.index_filename, file_path.file_name()) {
+            (Some(idx), Some(name)) if name.to_string_lossy() == idx.as_str() => {
+                match rel.rsplit_once('/') {
+                    Some((parent, _)) => parent.to_string(),
+                    None => String::new(), // index file at mount root
+                }
+            }
+            _ => rel
+                .strip_suffix(".md")
+                .map(|s| s.to_string())
+                .unwrap_or(rel),
+        };
+
+        match (source.prefix.is_empty(), slug_base.is_empty()) {
+            (true, _) => slug_base,
+            (false, true) => source.prefix.clone(),
+            (false, false) => format!("{}/{}", source.prefix, slug_base),
         }
     }
 
@@ -111,8 +131,28 @@ impl MemexConfig {
             ));
         };
 
-        let file_path = source.mount.join(format!("{rest}.md"));
-        Ok(ResolvedBlueprint { source, file_path })
+        // Default form: <mount>/<rest>.md
+        let default_path = source.mount.join(format!("{rest}.md"));
+        // Index form: <mount>/<rest>/<index_filename> (only when configured)
+        if let Some(idx) = &source.index_filename {
+            let index_path = if rest.is_empty() {
+                source.mount.join(idx)
+            } else {
+                source.mount.join(rest).join(idx)
+            };
+            // Whichever exists wins. Prefer the default form on ties — but
+            // collision detection at load time should have caught that already.
+            if !default_path.exists() && index_path.exists() {
+                return Ok(ResolvedBlueprint {
+                    source,
+                    file_path: index_path,
+                });
+            }
+        }
+        Ok(ResolvedBlueprint {
+            source,
+            file_path: default_path,
+        })
     }
 
     /// Enumerate all blueprint files across all sources.
@@ -207,16 +247,19 @@ impl MemexConfig {
     }
 
     fn check_collisions(&self) -> Result<()> {
-        let mut seen: BTreeMap<String, String> = BTreeMap::new();
+        let mut seen: BTreeMap<String, (String, PathBuf)> = BTreeMap::new();
         for (source, file_path) in self.all_blueprints() {
             let id = self.blueprint_id(source, &file_path);
-            if let Some(other) = seen.insert(id.clone(), source.name.clone()) {
-                if other != source.name {
-                    bail!(
-                        "slug collision: '{id}' is produced by sources '{other}' and '{}'",
-                        source.name
-                    );
-                }
+            if let Some((other_src, other_path)) =
+                seen.insert(id.clone(), (source.name.clone(), file_path.clone()))
+            {
+                bail!(
+                    "slug collision: '{id}' is produced by '{}' ({}) and '{}' ({})",
+                    other_src,
+                    other_path.display(),
+                    source.name,
+                    file_path.display()
+                );
             }
         }
         Ok(())
@@ -247,6 +290,7 @@ struct RawSource {
     exclude: Option<Vec<String>>,
     #[serde(default)]
     readonly: bool,
+    index_filename: Option<String>,
 }
 
 /// Only looks for `./memex.toml` in the given directory. No upward search,
@@ -305,6 +349,7 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
             include,
             exclude,
             readonly: raw_src.readonly,
+            index_filename: raw_src.index_filename,
         });
     }
 

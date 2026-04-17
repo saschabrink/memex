@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use crate::config::{self, MemexConfig, Source};
 use crate::{db, git, indexer, refresh};
 
+pub mod agent_instructions;
 pub mod broken_refs;
 pub mod delete;
 pub mod diff;
@@ -18,6 +19,23 @@ pub mod search;
 pub mod sync;
 pub mod versions;
 pub mod write;
+
+/// Escape a string for embedding inside a JSON string literal (RFC 8259).
+pub fn json_escape(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    for c in s.chars() {
+        match c {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if (c as u32) < 0x20 => out.push_str(&format!("\\u{:04x}", c as u32)),
+            c => out.push(c),
+        }
+    }
+    out
+}
 
 /// Error out if the source is marked `readonly = true`.
 pub fn ensure_writable(source: &Source) -> Result<()> {

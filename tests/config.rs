@@ -444,6 +444,108 @@ fn extract_title_returns_untitled_when_no_heading() {
 
 // ---------- collisions ----------
 
+// ---------- index_filename ----------
+
+#[test]
+fn blueprint_id_uses_parent_dir_for_index_filename_match() {
+    let dir = mk_tmp("memex-idx-");
+    std::fs::create_dir_all(dir.join("deps").join("ecto_context")).unwrap();
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[deps]
+mount = "deps"
+index_filename = "usage-rules.md"
+"#,
+    )
+    .unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    let source = &cfg.sources[0];
+
+    // Index file → slug drops filename, uses parent dir.
+    let idx_path = source.mount.join("ecto_context").join("usage-rules.md");
+    assert_eq!(cfg.blueprint_id(source, &idx_path), "deps/ecto_context");
+
+    // Non-matching file → default slug derivation.
+    let other = source.mount.join("ecto_context").join("other.md");
+    assert_eq!(cfg.blueprint_id(source, &other), "deps/ecto_context/other");
+}
+
+#[test]
+fn blueprint_id_handles_index_file_at_mount_root() {
+    let dir = mk_tmp("memex-idx-");
+    std::fs::create_dir_all(dir.join("bp")).unwrap();
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[bp]
+mount = "bp"
+index_filename = "usage-rules.md"
+"#,
+    )
+    .unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    let source = &cfg.sources[0];
+    let root_idx = source.mount.join("usage-rules.md");
+    // Slug collapses to just the prefix.
+    assert_eq!(cfg.blueprint_id(source, &root_idx), "bp");
+}
+
+#[test]
+fn resolve_blueprint_finds_index_file_when_default_absent() {
+    let dir = mk_tmp("memex-idx-");
+    std::fs::create_dir_all(dir.join("deps").join("ecto_context")).unwrap();
+    std::fs::write(
+        dir.join("deps").join("ecto_context").join("usage-rules.md"),
+        "# ecto_context",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[deps]
+mount = "deps"
+index_filename = "usage-rules.md"
+"#,
+    )
+    .unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    let r = cfg.resolve_blueprint("deps/ecto_context").unwrap();
+    assert_eq!(
+        r.file_path,
+        dir.join("deps").join("ecto_context").join("usage-rules.md")
+    );
+}
+
+#[test]
+fn ensure_initialized_detects_index_filename_collision_within_source() {
+    let dir = mk_tmp("memex-idx-");
+    std::fs::create_dir_all(dir.join("deps").join("foo")).unwrap();
+    // Both files produce slug "deps/foo" → collision.
+    std::fs::write(dir.join("deps").join("foo.md"), "# foo").unwrap();
+    std::fs::write(
+        dir.join("deps").join("foo").join("usage-rules.md"),
+        "# foo-index",
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[deps]
+mount = "deps"
+index_filename = "usage-rules.md"
+"#,
+    )
+    .unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    let err = cfg.ensure_initialized().unwrap_err().to_string();
+    assert!(err.contains("slug collision"), "got: {err}");
+}
+
 #[test]
 fn ensure_initialized_detects_slug_collisions() {
     let dir = mk_tmp("memex-coll-");

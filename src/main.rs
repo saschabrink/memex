@@ -60,10 +60,26 @@ enum Command {
         #[arg(long, help = "Emit Claude Code hook JSON instead of human output.")]
         claude_hook: bool,
     },
+    #[command(
+        about = "Print generic usage instructions for LLM agents.",
+        long_about = "Outputs a project-agnostic brief on how to use memex tools. \
+                      Intended for CLAUDE.md inclusion or a Claude Code SessionStart hook. \
+                      Does not require a memex.toml."
+    )]
+    AgentInstructions {
+        #[arg(long, help = "Emit Claude Code SessionStart hook JSON instead of plain markdown.")]
+        claude_hook: bool,
+    },
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    // Commands that do not require a memex.toml.
+    if let Command::AgentInstructions { claude_hook } = &cli.command {
+        return commands::agent_instructions::run(*claude_hook);
+    }
+
     let cwd = std::env::current_dir()?;
     let cfg = config::load(&cwd, cli.config.as_deref())?;
     cfg.ensure_initialized()?;
@@ -90,5 +106,6 @@ fn main() -> Result<()> {
             event,
             claude_hook,
         } => commands::hook_advice::run(&cfg, &file, &event, claude_hook),
+        Command::AgentInstructions { .. } => unreachable!("handled above"),
     }
 }

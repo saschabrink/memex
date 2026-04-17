@@ -11,17 +11,22 @@ Every write is automatically committed to git, so every blueprint has a full ver
 - **Fast cold start** (low tens of milliseconds).
 - **Self-healing index**: every `search` / `list` runs a SHA-256 staleness check and re-embeds anything that changed on disk.
 - **Pipe-friendly**: `echo "..." | memex write <id> -` reads content from stdin.
-- **Auto push** on write for sources that have a remote — no manual sync to keep shared blueprints up to date.
+- **Auto push** on write for sources that have a remote; **read-only** sources block writes so shared blueprints can't be edited accidentally.
+- **Hook-driven agent workflows**: file-pattern `hooks.toml` rules inject the right blueprints before an LLM edits a file. Works cleanly with Claude Code `PreToolUse` / `PostToolUse` hooks.
+- **Self-documenting for agents**: `memex agent-instructions` emits a brief that can go straight into a SessionStart hook.
 
 ## Installation
 
-### Apple Silicon (macOS arm64)
-
 ```bash
-curl -sSL https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | sh
 ```
 
-This downloads the latest release binary to `~/.local/bin/memex`. Override the location with `MEMEX_INSTALL_DIR=/usr/local/bin`. Pin a specific version with `MEMEX_VERSION=v0.2.0`.
+Downloads the latest release binary to `~/.local/bin/memex`. Prebuilt binaries ship for:
+
+- macOS Apple Silicon (`aarch64-apple-darwin`)
+- Linux x86_64 (`x86_64-unknown-linux-gnu`)
+
+Overrides: `MEMEX_INSTALL_DIR=/usr/local/bin` for a different target directory, `MEMEX_VERSION=v0.3.0` to pin a specific release.
 
 Make sure `~/.local/bin` is on your `PATH`:
 
@@ -29,9 +34,9 @@ Make sure `~/.local/bin` is on your `PATH`:
 export PATH="$HOME/.local/bin:$PATH"
 ```
 
-### Linux / Intel Mac / building from source
+### Building from source
 
-Prebuilt binaries ship only for Apple Silicon at the moment. Everywhere else, build from source — `cargo build --release` produces a self-contained `memex` binary.
+For other platforms, build from source:
 
 ```bash
 git clone https://github.com/exfoundry/memex
@@ -84,6 +89,7 @@ include = ["**/*.md"]           # optional. glob patterns relative to mount. Def
 exclude = ["drafts/**"]         # optional.
 remote  = "git@..."             # optional. if mount doesn't exist, memex clones from here on `sync`.
 readonly = true                 # optional. blocks writes, adds "(read-only)" to titles.
+index_filename = "usage-rules.md"  # optional. files with this name represent their parent directory as a slug.
 ```
 
 ### Path resolution
@@ -156,6 +162,22 @@ Sources with a `remote` are cloned into their `mount` on `memex sync`. The mount
 
 When memex enumerates a source, it skips any subtree that contains its own `.git/` (e.g. other cloned sources). This mirrors git-submodule semantics.
 
+### Index files
+
+Set `index_filename` on a source to declare a filename that represents its parent directory. Like `index.html` on the web or `mod.rs` in Rust, the matching file becomes the slug of its containing folder:
+
+```toml
+[deps]
+mount          = "deps"
+include        = ["*/usage-rules.md"]
+index_filename = "usage-rules.md"
+readonly       = true
+```
+
+With this config, `deps/ecto_context/usage-rules.md` has slug `deps/ecto_context` (not `deps/ecto_context/usage-rules`). The primary use case is indexing per-package usage rules that ship with Hex dependencies — the slug points directly at the package name.
+
+Non-matching files in the same source fall through to the normal slug rule. If two files in one source would collide on the same slug (e.g. both `deps/foo.md` and `deps/foo/usage-rules.md` exist), the config fails to load.
+
 ## Commands
 
 ```
@@ -205,10 +227,11 @@ EOF
 
 | Command | Description |
 |---|---|
-| `memex sync` | For each source with a `remote`: clone if missing, else `git pull` + `git push`. |
+| `memex sync` | For each source with a `remote`: clone if missing, else `git pull --ff-only` (+ `git push` for writable sources). Never merges or rebases. |
 | `memex rebuild-index` | Drop the index and rebuild from disk. Only needed after schema changes or index corruption — normal stale-check handles everything else. |
-| `memex broken-refs` | Find `[[slug]]` references in blueprint content that don't resolve to an existing blueprint. |
+| `memex broken-refs` | Find `[[slug]]` references in blueprints, and `blueprint`/`blueprints` entries in `hooks.toml`, that don't resolve. |
 | `memex hook-advice <file> --event pre-write\|post-write [--claude-hook]` | Look up matching hooks for `<file>`. See [Hooks](#hooks). |
+| `memex agent-instructions [--claude-hook]` | Print generic usage instructions for LLM agents. Does not require a `memex.toml`. See [Agent onboarding](#agent-onboarding). |
 
 ### Cross-references
 
@@ -218,6 +241,53 @@ Inside blueprint content, use `[[slug]]` to reference another blueprint. `broken
 - **Bare-name match** — a ref without slashes (e.g. `[[context]]`) matches any slug whose last path segment equals the ref. Convenient for short links inside a tightly-coupled set of blueprints.
 
 If multiple slugs share the same last segment, a bare ref is still considered resolved (ambiguity is not flagged). Use the full slug when you need to disambiguate.
+
+## Agent onboarding
+
+memex ships a built-in instruction brief for LLM agents. Rather than copy tool-usage boilerplate into every project's `CLAUDE.md` / `AGENTS.md`, the brief is emitted by the CLI and updates automatically with memex upgrades.
+
+### Session-start hook (recommended)
+
+If you use Claude Code, add a `SessionStart` hook so the brief is delivered as context automatically. In `.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      { "command": "memex agent-instructions --claude-hook" }
+    ]
+  }
+}
+```
+
+Each session, the agent sees the current usage brief as `additionalContext`. No round-trip, no manual copying.
+
+### CLAUDE.md / AGENTS.md snippet
+
+If you prefer to keep your agent config file self-contained, or target tools that don't support SessionStart hooks, add this single paragraph to your project's agent file:
+
+```markdown
+## memex
+
+Before using memex tools for the first time in a session, run:
+
+    memex agent-instructions
+
+If the command isn't found, install it first:
+
+    curl -LsSf https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | sh
+```
+
+The CLI output is plain markdown, safe to inline into any agent's context.
+
+### What the brief covers
+
+- MCP tool names and when to use each (`search_blueprints`, `read_blueprint`, `list_blueprints`).
+- When to reach for memex vs. asking the user vs. guessing.
+- What not to do (paraphrasing blueprint content, skipping hook advice, writing to read-only sources).
+- CLI fallbacks for environments without MCP.
+
+The brief is project-agnostic. Project-specific context (architecture, conventions, no-gos) belongs in your `CLAUDE.md` / `AGENTS.md` alongside — not duplicated into memex.
 
 ## Hooks
 
@@ -324,13 +394,18 @@ The binary is fully self-contained: SQLite is bundled via `rusqlite`'s `bundled`
 
 ## Releases
 
-Releases are tagged `vX.Y.Z` and built automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml) on GitHub-hosted `macos-14` runners (Apple Silicon). The workflow packages `target/aarch64-apple-darwin/release/memex` as `memex-aarch64-apple-darwin.tar.gz` plus a SHA-256 sidecar and attaches both to the GitHub Release.
+Releases are tagged `vX.Y.Z` and built automatically by [`.github/workflows/release.yml`](.github/workflows/release.yml) on GitHub-hosted runners. The workflow builds a matrix:
+
+- `aarch64-apple-darwin` on `macos-14`
+- `x86_64-unknown-linux-gnu` on `ubuntu-22.04`
+
+Each target produces `memex-<target>.tar.gz` + SHA-256 sidecar, both attached to the GitHub Release.
 
 To cut a release:
 
 ```bash
 # bump version in Cargo.toml, commit
-git tag v0.2.0
+git tag v0.4.0
 git push --tags
 ```
 
