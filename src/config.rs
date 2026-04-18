@@ -14,6 +14,12 @@ pub struct Source {
     pub remote: Option<String>,
     pub include: Vec<String>,
     pub exclude: Vec<String>,
+    /// File extensions (without the leading dot) this source indexes.
+    /// Default `["md"]`. Files that don't match the extension list are
+    /// skipped during enumeration regardless of whether they match an
+    /// `include` glob. The first extension is also the default when
+    /// creating a new blueprint via `write` (slug → path).
+    pub extensions: Vec<String>,
     /// Read-only sources reject `write`/`edit`/`delete`/`move` and show
     /// a `(read-only)` title suffix in `list`/`search`.
     pub readonly: bool,
@@ -83,10 +89,7 @@ impl MemexConfig {
                     None => String::new(), // index file at mount root
                 }
             }
-            _ => rel
-                .strip_suffix(".md")
-                .map(|s| s.to_string())
-                .unwrap_or(rel),
+            _ => strip_any_extension(&rel, &source.extensions).unwrap_or(rel),
         };
 
         match (source.prefix.is_empty(), slug_base.is_empty()) {
@@ -137,8 +140,17 @@ impl MemexConfig {
             ));
         };
 
-        // Default form: <mount>/<rest>.md
-        let default_path = source.mount.join(format!("{rest}.md"));
+        // Default form: <mount>/<rest>.<ext> for each configured extension.
+        // Prefer an existing file; if none exists, use the first extension
+        // (the "primary" format for new writes).
+        let mut default_path = source.mount.join(format!("{rest}.{}", source.extensions[0]));
+        for ext in &source.extensions {
+            let candidate = source.mount.join(format!("{rest}.{ext}"));
+            if candidate.exists() {
+                default_path = candidate;
+                break;
+            }
+        }
         // Index form: <mount>/<rest>/<index_filename> (only when configured)
         if let Some(idx) = &source.index_filename {
             let index_path = if rest.is_empty() {
@@ -343,6 +355,7 @@ struct RawSource {
     remote: Option<String>,
     include: Option<Vec<String>>,
     exclude: Option<Vec<String>>,
+    extensions: Option<Vec<String>>,
     #[serde(default)]
     readonly: bool,
     index_filename: Option<String>,
@@ -390,11 +403,35 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
         if prefix.is_empty() {
             empty_prefix_count += 1;
         }
+        let exclude = raw_src.exclude.unwrap_or_default();
+        let extensions_explicit = raw_src.extensions.is_some();
+        let extensions = raw_src
+            .extensions
+            .filter(|v| !v.is_empty())
+            .map(|v| {
+                // Normalize: strip any leading dot so callers can write
+                // `["md", "yaml"]` or `[".md", ".yaml"]` interchangeably.
+                v.into_iter()
+                    .map(|e| e.trim_start_matches('.').to_string())
+                    .filter(|e| !e.is_empty())
+                    .collect::<Vec<_>>()
+            })
+            .filter(|v| !v.is_empty())
+            .unwrap_or_else(|| vec!["md".to_string()]);
+        // Default include: if extensions is default (md-only), keep the
+        // legacy `**/*.md` so pre-extensions configs are unchanged. If the
+        // user configured extensions explicitly, default to `**/*` and let
+        // the extension allowlist do the filtering.
         let include = raw_src
             .include
             .filter(|v| !v.is_empty())
-            .unwrap_or_else(|| vec!["**/*.md".to_string()]);
-        let exclude = raw_src.exclude.unwrap_or_default();
+            .unwrap_or_else(|| {
+                if extensions_explicit {
+                    vec!["**/*".to_string()]
+                } else {
+                    vec!["**/*.md".to_string()]
+                }
+            });
 
         sources.push(Source {
             name,
@@ -403,6 +440,7 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
             remote: raw_src.remote,
             include,
             exclude,
+            extensions,
             readonly: raw_src.readonly,
             index_filename: raw_src.index_filename,
         });
@@ -423,6 +461,23 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
         sources,
         also_scan: raw.also_scan,
     })
+}
+
+/// Strip a `.<ext>` suffix from `s` if any of the configured extensions match.
+/// Prefers the longest match (e.g. `yml` before `l` if both were configured).
+fn strip_any_extension(s: &str, extensions: &[String]) -> Option<String> {
+    let mut best: Option<&str> = None;
+    for ext in extensions {
+        if s.len() > ext.len() + 1
+            && s.as_bytes()[s.len() - ext.len() - 1] == b'.'
+            && s.ends_with(ext.as_str())
+        {
+            if best.map_or(true, |b: &str| ext.len() > b.len()) {
+                best = Some(ext);
+            }
+        }
+    }
+    best.map(|ext| s[..s.len() - ext.len() - 1].to_string())
 }
 
 fn resolve_path(base: &Path, p: &str) -> PathBuf {
@@ -520,7 +575,8 @@ fn enumerate_source(source: &Source) -> Result<Vec<PathBuf>> {
             continue;
         }
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !source.extensions.iter().any(|e| e == ext) {
             continue;
         }
         let rel = match path.strip_prefix(&source.mount) {
@@ -622,7 +678,8 @@ pub fn enumerate_source_with_diagnostics(source: &Source) -> Result<EnumDiagnost
             continue;
         }
         let path = entry.path();
-        if path.extension().and_then(|e| e.to_str()) != Some("md") {
+        let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+        if !source.extensions.iter().any(|e| e == ext) {
             continue;
         }
         let rel = match path.strip_prefix(&source.mount) {

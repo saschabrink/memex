@@ -782,3 +782,148 @@ exclude = ["drafts/**"]
     assert_eq!(diag.skipped[0].reason, SkipReason::ExcludeGlob);
     assert!(diag.skipped[0].rel_path.ends_with("wip.md"));
 }
+
+// ---------- extensions ----------
+
+#[test]
+fn default_extensions_is_md_only() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        "project_name = \"p\"\n\n[s]\nmount = \"src\"\n",
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(dir.join("src").join("a.md"), "x").unwrap();
+    std::fs::write(dir.join("src").join("a.yaml"), "x").unwrap();
+    std::fs::write(dir.join("src").join("a.txt"), "x").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    assert_eq!(cfg.sources[0].extensions, vec!["md"]);
+    let matched = config::enumerate_source_with_diagnostics(&cfg.sources[0])
+        .unwrap()
+        .matched;
+    assert_eq!(matched.len(), 1);
+    assert!(matched[0].ends_with("a.md"));
+}
+
+#[test]
+fn extensions_yaml_and_txt_are_indexed() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+extensions = ["md", "yaml", "txt"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    std::fs::write(dir.join("src").join("a.md"), "x").unwrap();
+    std::fs::write(dir.join("src").join("b.yaml"), "x").unwrap();
+    std::fs::write(dir.join("src").join("c.txt"), "x").unwrap();
+    std::fs::write(dir.join("src").join("d.pdf"), "x").unwrap();
+
+    let cfg = config::load(&dir, None).unwrap();
+    let matched = config::enumerate_source_with_diagnostics(&cfg.sources[0])
+        .unwrap()
+        .matched;
+    let names: Vec<_> = matched
+        .iter()
+        .map(|p| p.file_name().unwrap().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(names.len(), 3, "got: {names:?}");
+    assert!(names.contains(&"a.md".to_string()));
+    assert!(names.contains(&"b.yaml".to_string()));
+    assert!(names.contains(&"c.txt".to_string()));
+    assert!(!names.contains(&"d.pdf".to_string()));
+}
+
+#[test]
+fn extensions_strip_leading_dot_tolerated() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+extensions = [".md", ".yaml"]
+"#,
+    )
+    .unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    assert_eq!(cfg.sources[0].extensions, vec!["md", "yaml"]);
+}
+
+#[test]
+fn blueprint_id_strips_any_configured_extension() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+extensions = ["md", "yaml"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+    let source = &cfg.sources[0];
+
+    let fp_md = source.mount.join("vision.md");
+    assert_eq!(cfg.blueprint_id(source, &fp_md), "s/vision");
+
+    let fp_yaml = source.mount.join("panel.yaml");
+    assert_eq!(cfg.blueprint_id(source, &fp_yaml), "s/panel");
+}
+
+#[test]
+fn resolve_blueprint_prefers_existing_extension() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+extensions = ["md", "yaml"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    // Only the yaml exists — resolve must return the yaml path.
+    std::fs::write(dir.join("src").join("panel.yaml"), "x").unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+
+    let resolved = cfg.resolve_blueprint("s/panel").unwrap();
+    assert_eq!(
+        resolved.file_path,
+        cfg.sources[0].mount.join("panel.yaml")
+    );
+}
+
+#[test]
+fn resolve_blueprint_falls_back_to_first_extension_for_new_blueprints() {
+    let dir = mk_tmp("memex-ext-");
+    std::fs::write(
+        dir.join("memex.toml"),
+        r#"project_name = "p"
+
+[s]
+mount = "src"
+extensions = ["md", "yaml"]
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("src")).unwrap();
+    let cfg = config::load(&dir, None).unwrap();
+
+    // Neither file exists — fall back to first configured extension (md).
+    let resolved = cfg.resolve_blueprint("s/new-bp").unwrap();
+    assert_eq!(resolved.file_path, cfg.sources[0].mount.join("new-bp.md"));
+}

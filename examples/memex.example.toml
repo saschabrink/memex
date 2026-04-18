@@ -43,11 +43,17 @@ project_name = "my_project"
 
 [project]
 mount = "docs"
-# include = ["**/*.md"]     # default — all .md files under mount
-# exclude = ["drafts/**"]   # optional
-# prefix  = "project"       # default = source name.
-                            # Use prefix = "" for bare slugs (at most one
-                            # source per config may have "").
+# include    = ["**/*.md"]     # default when extensions = ["md"];
+                               # when extensions is set explicitly,
+                               # default becomes "**/*".
+# exclude    = ["drafts/**"]   # optional
+# extensions = ["md"]          # default. Set to ["md", "yaml"] (or add
+                               # "txt", "yml", "org", …) to index other
+                               # plain-text formats as blueprints.
+                               # First entry is the default for new writes.
+# prefix     = "project"       # default = source name.
+                               # Use prefix = "" for bare slugs (at most one
+                               # source per config may have "").
 
 # ═══════════════════════════════════════════════════════════════════════
 # Source: shared blueprints, synced from a remote git repo

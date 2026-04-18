@@ -5,6 +5,28 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-04-17
+
+Sources can now index non-markdown plain-text formats. Bring YAML data
+files, `.txt` extractions, `.org` notes, etc. into the blueprint graph
+without pre-rendering them to markdown.
+
+### Added
+- `extensions` per-source config option (default `["md"]`). Files whose
+  extension isn't in this list are skipped during enumeration. The first
+  entry is the default format when creating a new blueprint via `write`.
+  Leading dots are tolerated — `["md", "yaml"]` and `[".md", ".yaml"]`
+  are equivalent.
+- Slug computation strips whichever configured extension matches (longest
+  wins). Slug → path resolution tries every configured extension and
+  returns the one that exists; falls back to the first extension for
+  new-blueprint writes.
+
+### Changed
+- Default `include` is now `"**/*"` when `extensions` is set explicitly
+  (otherwise remains `"**/*.md"` for full backwards compatibility).
+  Pre-existing configs without `extensions` behave identically to 0.8.0.
+
 ## [0.8.0] - 2026-04-17
 
 Hooks can now match on file contents, not just paths. Lets you target
