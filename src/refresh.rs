@@ -26,8 +26,10 @@ pub fn refresh(cfg: &MemexConfig, conn: &mut rusqlite::Connection) -> Result<()>
 
     let indexed = db::index_state(conn)?;
     let indexed_ids: HashSet<&str> = indexed.iter().map(|(id, _)| id.as_str()).collect();
-    let indexed_hashes: HashMap<&str, &str> =
-        indexed.iter().map(|(id, h)| (id.as_str(), h.as_str())).collect();
+    let indexed_hashes: HashMap<&str, &str> = indexed
+        .iter()
+        .map(|(id, h)| (id.as_str(), h.as_str()))
+        .collect();
 
     for (id, _) in &indexed {
         if !disk_by_id.contains_key(id) {

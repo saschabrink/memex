@@ -18,16 +18,17 @@ pub fn connect(db_path: &Path) -> Result<Connection> {
         std::fs::create_dir_all(parent)
             .with_context(|| format!("creating {}", parent.display()))?;
     }
-    let conn = Connection::open(db_path)
-        .with_context(|| format!("opening {}", db_path.display()))?;
+    let conn =
+        Connection::open(db_path).with_context(|| format!("opening {}", db_path.display()))?;
     Ok(conn)
 }
 
 const SCHEMA_VERSION: i64 = 2;
 
 pub fn setup(conn: &Connection) -> Result<()> {
-    let version: i64 =
-        conn.query_row("SELECT user_version FROM pragma_user_version", [], |r| r.get(0))?;
+    let version: i64 = conn.query_row("SELECT user_version FROM pragma_user_version", [], |r| {
+        r.get(0)
+    })?;
     if version < SCHEMA_VERSION {
         conn.execute_batch(
             "DROP TABLE IF EXISTS blueprints;
@@ -55,7 +56,9 @@ pub fn setup(conn: &Connection) -> Result<()> {
 pub fn index_state(conn: &Connection) -> Result<Vec<(String, String)>> {
     let mut stmt = conn.prepare("SELECT id, content_hash FROM blueprints")?;
     let rows = stmt
-        .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+        .query_map([], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+        })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
 }
@@ -112,7 +115,13 @@ pub fn search(
     let mut stmt = conn.prepare(&sql)?;
     let raw: Vec<(String, Vec<u8>, String, String, String)> = stmt
         .query_map(params_from_iter(folders.iter()), |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            Ok((
+                row.get(0)?,
+                row.get(1)?,
+                row.get(2)?,
+                row.get(3)?,
+                row.get(4)?,
+            ))
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     let mut results: Vec<SearchResult> = raw
@@ -120,7 +129,13 @@ pub fn search(
         .map(|(id, blob, title, path, folder)| {
             let emb = deserialize(&blob);
             let distance = 1.0 - cosine_similarity(query, &emb);
-            SearchResult { id, title, path, folder, distance }
+            SearchResult {
+                id,
+                title,
+                path,
+                folder,
+                distance,
+            }
         })
         .collect();
     results.sort_by(|a, b| {
@@ -193,9 +208,8 @@ fn serialize(embedding: &[f32]) -> Vec<u8> {
 }
 
 pub fn get(conn: &Connection, id: &str) -> Result<Option<BlueprintRow>> {
-    let mut stmt = conn.prepare(
-        "SELECT id, title, path, folder, content FROM blueprints WHERE id = ?",
-    )?;
+    let mut stmt =
+        conn.prepare("SELECT id, title, path, folder, content FROM blueprints WHERE id = ?")?;
     let row = stmt
         .query_row([id], |row| {
             Ok(BlueprintRow {

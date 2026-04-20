@@ -84,12 +84,7 @@ impl HookSet {
     /// is matched against it with its path regex (if any). If the hook has
     /// a `content_pattern`, the file is read from `project_root.join(file_path)`
     /// and matched against that. File reads are cached across the loop.
-    pub fn advise(
-        &self,
-        event: Event,
-        file_path: &str,
-        project_root: &Path,
-    ) -> Option<HookAdvice> {
+    pub fn advise(&self, event: Event, file_path: &str, project_root: &Path) -> Option<HookAdvice> {
         let hooks = match event {
             Event::PreWrite => &self.pre_write,
             Event::PostWrite => &self.post_write,
@@ -295,14 +290,10 @@ fn build_hook(raw: RawHook, event: Event, source: Option<String>) -> Result<Hook
     match event {
         Event::PreWrite => {
             if raw.text.is_some() {
-                bail!(
-                    "[[pre-write]] hook '{hook_id}' has 'text' (allowed only on post-write)"
-                );
+                bail!("[[pre-write]] hook '{hook_id}' has 'text' (allowed only on post-write)");
             }
             if raw.blueprint.is_none() && raw.blueprints.is_none() {
-                bail!(
-                    "[[pre-write]] hook '{hook_id}' needs 'blueprint' or 'blueprints'"
-                );
+                bail!("[[pre-write]] hook '{hook_id}' needs 'blueprint' or 'blueprints'");
             }
             if raw.blueprint.is_some() && raw.blueprints.is_some() {
                 bail!(
@@ -331,8 +322,8 @@ fn build_hook(raw: RawHook, event: Event, source: Option<String>) -> Result<Hook
 
     let (pattern, pattern_src) = match raw.pattern {
         Some(src) => {
-            let re = Regex::new(&src)
-                .with_context(|| format!("invalid path regex in hook: {src}"))?;
+            let re =
+                Regex::new(&src).with_context(|| format!("invalid path regex in hook: {src}"))?;
             (Some(re), Some(src))
         }
         None => (None, None),

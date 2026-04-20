@@ -5,7 +5,11 @@ use std::path::PathBuf;
 use memex::{commands, config};
 
 #[derive(Parser)]
-#[command(name = "memex", version, about = "Multi-source blueprint knowledge base.")]
+#[command(
+    name = "memex",
+    version,
+    about = "Multi-source blueprint knowledge base."
+)]
 struct Cli {
     #[arg(long, global = true, help = "Override memex.toml path")]
     config: Option<PathBuf>,
@@ -67,7 +71,10 @@ enum Command {
                       Does not require a memex.toml."
     )]
     AgentInstructions {
-        #[arg(long, help = "Emit Claude Code SessionStart hook JSON instead of plain markdown.")]
+        #[arg(
+            long,
+            help = "Emit Claude Code SessionStart hook JSON instead of plain markdown."
+        )]
         claude_hook: bool,
     },
     #[command(

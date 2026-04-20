@@ -81,9 +81,9 @@ fn is_valid_slug(s: &str) -> bool {
     }
     // allow: letters (any case), digits, `-`, `_`, `.`, `/`.
     // disallow: whitespace, control chars, pipe (wiki-style alias syntax).
-    s.chars().all(|c| {
-        c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/')
-    }) && !s.starts_with('/')
+    s.chars()
+        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.' | '/'))
+        && !s.starts_with('/')
         && !s.ends_with('/')
         && !s.contains("//")
 }

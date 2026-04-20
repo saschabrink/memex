@@ -5,8 +5,8 @@ use std::path::PathBuf;
 pub struct Embedder(TextEmbedding);
 
 fn model_cache_dir() -> Result<PathBuf> {
-    let base = dirs::cache_dir()
-        .ok_or_else(|| anyhow!("could not determine user cache directory"))?;
+    let base =
+        dirs::cache_dir().ok_or_else(|| anyhow!("could not determine user cache directory"))?;
     Ok(base.join("memex").join("models"))
 }
 

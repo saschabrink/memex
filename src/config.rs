@@ -143,7 +143,9 @@ impl MemexConfig {
         // Default form: <mount>/<rest>.<ext> for each configured extension.
         // Prefer an existing file; if none exists, use the first extension
         // (the "primary" format for new writes).
-        let mut default_path = source.mount.join(format!("{rest}.{}", source.extensions[0]));
+        let mut default_path = source
+            .mount
+            .join(format!("{rest}.{}", source.extensions[0]));
         for ext in &source.extensions {
             let candidate = source.mount.join(format!("{rest}.{ext}"));
             if candidate.exists() {
@@ -185,10 +187,7 @@ impl MemexConfig {
                     }
                 }
                 Err(e) => {
-                    eprintln!(
-                        "warning: enumerating source {}: {}",
-                        source.name, e
-                    );
+                    eprintln!("warning: enumerating source {}: {}", source.name, e);
                 }
             }
         }

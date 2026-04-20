@@ -27,7 +27,10 @@ fn substitute_replaces_group_references() {
 fn substitute_handles_group_zero_as_full_match() {
     let re = fancy_regex::Regex::new(r"^lib/(.+)\.ex$").unwrap();
     let caps = re.captures("lib/foo.ex").unwrap().unwrap();
-    assert_eq!(hooks::substitute("formatted: ${0}", &caps), "formatted: lib/foo.ex");
+    assert_eq!(
+        hooks::substitute("formatted: ${0}", &caps),
+        "formatted: lib/foo.ex"
+    );
 }
 
 #[test]
@@ -60,7 +63,10 @@ blueprint = "phoenix-liveview/liveview"
     );
     let set = hooks::load(&env.cfg).unwrap();
     assert_eq!(set.pre_write.len(), 1);
-    assert_eq!(set.pre_write[0].blueprints, vec!["phoenix-liveview/liveview"]);
+    assert_eq!(
+        set.pre_write[0].blueprints,
+        vec!["phoenix-liveview/liveview"]
+    );
     assert!(set.pre_write[0].source.is_none()); // project-level
 }
 
@@ -78,10 +84,7 @@ blueprints = ["a", "b"]
     let set = hooks::load(&env.cfg).unwrap();
     assert_eq!(set.pre_write.len(), 1);
     assert_eq!(set.pre_write[0].blueprints, vec!["a", "b"]);
-    assert_eq!(
-        set.pre_write[0].source.as_deref(),
-        Some("testsource")
-    );
+    assert_eq!(set.pre_write[0].source.as_deref(), Some("testsource"));
 }
 
 #[test]
@@ -122,7 +125,10 @@ text = "nope"
 "#,
     );
     let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
-    assert!(err.contains("pre-write") && err.contains("text"), "got: {err}");
+    assert!(
+        err.contains("pre-write") && err.contains("text"),
+        "got: {err}"
+    );
 }
 
 #[test]
@@ -174,7 +180,10 @@ pattern = "x"
 "#,
     );
     let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
-    assert!(err.contains("pre-write") && err.contains("needs"), "got: {err}");
+    assert!(
+        err.contains("pre-write") && err.contains("needs"),
+        "got: {err}"
+    );
 }
 
 #[test]
@@ -188,7 +197,10 @@ pattern = "x"
 "#,
     );
     let err = format!("{:#}", hooks::load(&env.cfg).unwrap_err());
-    assert!(err.contains("post-write") && err.contains("text"), "got: {err}");
+    assert!(
+        err.contains("post-write") && err.contains("text"),
+        "got: {err}"
+    );
 }
 
 #[test]
@@ -299,15 +311,11 @@ text = "advice"
 "#,
     );
     let set = hooks::load(&env.cfg).unwrap();
-    let pre = set
-        .advise(Event::PreWrite, "x", &env.project_dir)
-        .unwrap();
+    let pre = set.advise(Event::PreWrite, "x", &env.project_dir).unwrap();
     assert_eq!(pre.blueprints, vec!["bp"]);
     assert!(pre.text.is_none());
 
-    let post = set
-        .advise(Event::PostWrite, "x", &env.project_dir)
-        .unwrap();
+    let post = set.advise(Event::PostWrite, "x", &env.project_dir).unwrap();
     assert_eq!(post.text.as_deref(), Some("advice"));
     assert!(post.blueprints.is_empty());
 }
@@ -329,11 +337,7 @@ when_file_missing = "test/${1}_test.exs"
     let set = hooks::load(&env.cfg).unwrap();
 
     // Target absent → fires.
-    let fired = set.advise(
-        Event::PostWrite,
-        "lib/foo.ex",
-        &env.project_dir,
-    );
+    let fired = set.advise(Event::PostWrite, "lib/foo.ex", &env.project_dir);
     assert!(fired.is_some());
     assert_eq!(
         fired.unwrap().text.as_deref(),
@@ -342,11 +346,7 @@ when_file_missing = "test/${1}_test.exs"
 
     // Create the target; now the hook should NOT fire.
     write_file(&env.project_dir.join("test/foo_test.exs"), "");
-    let silent = set.advise(
-        Event::PostWrite,
-        "lib/foo.ex",
-        &env.project_dir,
-    );
+    let silent = set.advise(Event::PostWrite, "lib/foo.ex", &env.project_dir);
     assert!(silent.is_none());
 }
 
@@ -371,11 +371,7 @@ when_file_exists = "lib/${1}_companion.ex"
 
     // Companion present → fires.
     write_file(&env.project_dir.join("lib/foo_companion.ex"), "");
-    let fired = set.advise(
-        Event::PostWrite,
-        "lib/foo.ex",
-        &env.project_dir,
-    );
+    let fired = set.advise(Event::PostWrite, "lib/foo.ex", &env.project_dir);
     assert!(fired.is_some());
 }
 

@@ -5,7 +5,9 @@ use memex::db::{self, EMBEDDING_DIM};
 use common::mk_tmp;
 
 fn fake_emb(seed: f32) -> Vec<f32> {
-    (0..EMBEDDING_DIM).map(|i| seed + i as f32 * 0.0001).collect()
+    (0..EMBEDDING_DIM)
+        .map(|i| seed + i as f32 * 0.0001)
+        .collect()
 }
 
 #[test]
@@ -25,7 +27,9 @@ fn setup_creates_schema() {
     assert_eq!(count, 2);
 
     let version: i64 = conn
-        .query_row("SELECT user_version FROM pragma_user_version", [], |r| r.get(0))
+        .query_row("SELECT user_version FROM pragma_user_version", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert_eq!(version, 2);
 
@@ -66,8 +70,28 @@ fn upsert_overwrites_existing_row() {
     let mut conn = db::connect(&tmp.join("index.sqlite")).unwrap();
     db::setup(&conn).unwrap();
 
-    db::upsert(&mut conn, "s/a", "Old", "/p", "s", "old", "h1", &fake_emb(0.1)).unwrap();
-    db::upsert(&mut conn, "s/a", "New", "/p", "s", "new", "h2", &fake_emb(0.2)).unwrap();
+    db::upsert(
+        &mut conn,
+        "s/a",
+        "Old",
+        "/p",
+        "s",
+        "old",
+        "h1",
+        &fake_emb(0.1),
+    )
+    .unwrap();
+    db::upsert(
+        &mut conn,
+        "s/a",
+        "New",
+        "/p",
+        "s",
+        "new",
+        "h2",
+        &fake_emb(0.2),
+    )
+    .unwrap();
 
     let row = db::get(&conn, "s/a").unwrap().unwrap();
     assert_eq!(row.title, "New");
@@ -88,7 +112,9 @@ fn del_removes_row_and_embedding() {
     db::del(&conn, "s/a").unwrap();
     assert!(db::get(&conn, "s/a").unwrap().is_none());
     let emb_count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM blueprint_embeddings", [], |r| r.get(0))
+        .query_row("SELECT COUNT(*) FROM blueprint_embeddings", [], |r| {
+            r.get(0)
+        })
         .unwrap();
     assert_eq!(emb_count, 0);
     let _ = std::fs::remove_dir_all(&tmp);
@@ -121,8 +147,28 @@ fn search_ranks_by_cosine_distance() {
     // Identical-to-query vector → distance 0. Others further away.
     let query = fake_emb(0.5);
     db::upsert(&mut conn, "s/match", "Match", "/p", "s", "c", "h", &query).unwrap();
-    db::upsert(&mut conn, "s/far", "Far", "/p", "s", "c", "h", &fake_emb(-0.5)).unwrap();
-    db::upsert(&mut conn, "s/other", "Other", "/p", "s", "c", "h", &fake_emb(0.1)).unwrap();
+    db::upsert(
+        &mut conn,
+        "s/far",
+        "Far",
+        "/p",
+        "s",
+        "c",
+        "h",
+        &fake_emb(-0.5),
+    )
+    .unwrap();
+    db::upsert(
+        &mut conn,
+        "s/other",
+        "Other",
+        "/p",
+        "s",
+        "c",
+        "h",
+        &fake_emb(0.1),
+    )
+    .unwrap();
 
     let results = db::search(&conn, &query, &["s".to_string()], 3).unwrap();
     assert_eq!(results.len(), 3);
@@ -179,8 +225,11 @@ fn setup_drops_legacy_schema() {
          CREATE TABLE blueprint_embeddings (id TEXT PRIMARY KEY, embedding BLOB);",
     )
     .unwrap();
-    conn.execute("INSERT INTO blueprints (id, title) VALUES ('old', 'Old')", [])
-        .unwrap();
+    conn.execute(
+        "INSERT INTO blueprints (id, title) VALUES ('old', 'Old')",
+        [],
+    )
+    .unwrap();
 
     db::setup(&conn).unwrap();
 

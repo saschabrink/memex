@@ -11,11 +11,7 @@ use common::{create_env, mk_tmp};
 #[test]
 fn discover_finds_memex_toml_in_given_directory() {
     let dir = mk_tmp("memex-discover-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"p\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"p\"\n\n[s]\n").unwrap();
     let p = config::discover(&dir).unwrap();
     assert_eq!(p, dir.join("memex.toml"));
 }
@@ -57,11 +53,7 @@ fn discover_errors_when_no_config_found() {
 #[test]
 fn load_parses_project_name() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"acme\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"acme\"\n\n[s]\n").unwrap();
     let cfg = config::load(&dir, None).unwrap();
     assert_eq!(cfg.project_name, "acme");
 }
@@ -69,22 +61,14 @@ fn load_parses_project_name() {
 #[test]
 fn load_errors_on_empty_project_name() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"\"\n\n[s]\n").unwrap();
     assert!(config::load(&dir, None).is_err());
 }
 
 #[test]
 fn load_errors_when_project_name_missing() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "[s]\nmount = \".\"\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "[s]\nmount = \".\"\n").unwrap();
     assert!(config::load(&dir, None).is_err());
 }
 
@@ -109,11 +93,7 @@ fn load_resolves_project_root_relative_to_config() {
 #[test]
 fn load_default_root_is_config_dir() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"p\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"p\"\n\n[s]\n").unwrap();
     let cfg = config::load(&dir, None).unwrap();
     assert_eq!(cfg.project_root, dir);
 }
@@ -144,17 +124,16 @@ remote = "git@github.com:acme/shared.git"
 
     let shared = cfg.sources.iter().find(|s| s.name == "shared").unwrap();
     assert_eq!(shared.mount, dir.join("vendor").join("shared"));
-    assert_eq!(shared.remote.as_deref(), Some("git@github.com:acme/shared.git"));
+    assert_eq!(
+        shared.remote.as_deref(),
+        Some("git@github.com:acme/shared.git")
+    );
 }
 
 #[test]
 fn load_default_mount_is_project_root() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"p\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"p\"\n\n[s]\n").unwrap();
     let cfg = config::load(&dir, None).unwrap();
     assert_eq!(cfg.sources[0].mount, dir);
 }
@@ -162,11 +141,7 @@ fn load_default_mount_is_project_root() {
 #[test]
 fn load_default_prefix_is_source_name() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"p\"\n\n[hello]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"p\"\n\n[hello]\n").unwrap();
     let cfg = config::load(&dir, None).unwrap();
     assert_eq!(cfg.sources[0].prefix, "hello");
 }
@@ -204,11 +179,7 @@ prefix = ""
 #[test]
 fn load_default_include_is_all_md() {
     let dir = mk_tmp("memex-parse-");
-    std::fs::write(
-        dir.join("memex.toml"),
-        "project_name = \"p\"\n\n[s]\n",
-    )
-    .unwrap();
+    std::fs::write(dir.join("memex.toml"), "project_name = \"p\"\n\n[s]\n").unwrap();
     let cfg = config::load(&dir, None).unwrap();
     assert_eq!(cfg.sources[0].include, vec!["**/*.md"]);
 }
@@ -255,7 +226,10 @@ fn blueprint_id_includes_subdirectories() {
     let env = create_env();
     let source = &env.cfg.sources[0];
     let fp = source.mount.join("tech").join("migrations.md");
-    assert_eq!(env.cfg.blueprint_id(source, &fp), "testsource/tech/migrations");
+    assert_eq!(
+        env.cfg.blueprint_id(source, &fp),
+        "testsource/tech/migrations"
+    );
 }
 
 #[test]
@@ -284,7 +258,11 @@ fn resolve_blueprint_matches_by_prefix() {
 #[test]
 fn resolve_blueprint_errors_for_unknown_prefix() {
     let env = create_env();
-    let err = env.cfg.resolve_blueprint("nope/foo").unwrap_err().to_string();
+    let err = env
+        .cfg
+        .resolve_blueprint("nope/foo")
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("No source"), "got: {err}");
 }
 
@@ -433,7 +411,10 @@ fn db_path_is_in_cache_dir() {
 #[test]
 fn extract_title_returns_first_h1() {
     let env = create_env();
-    assert_eq!(env.cfg.extract_title("# My Title\n\nBody text."), "My Title");
+    assert_eq!(
+        env.cfg.extract_title("# My Title\n\nBody text."),
+        "My Title"
+    );
 }
 
 #[test]
@@ -640,11 +621,7 @@ mount = "blueprints"
     std::fs::create_dir_all(dir.join("blueprints")).unwrap();
     std::fs::create_dir_all(dir.join(".claude").join("skills")).unwrap();
     std::fs::write(dir.join(".claude").join("open-questions.md"), "x").unwrap();
-    std::fs::write(
-        dir.join(".claude").join("skills").join("commit.md"),
-        "y",
-    )
-    .unwrap();
+    std::fs::write(dir.join(".claude").join("skills").join("commit.md"), "y").unwrap();
     std::fs::write(dir.join("CLAUDE.md"), "z").unwrap();
 
     let cfg = config::load(&dir, None).unwrap();
@@ -730,7 +707,10 @@ mount = "src"
     std::fs::create_dir_all(dir.join("src").join("node_modules").join("lib")).unwrap();
     std::fs::create_dir_all(dir.join("src").join("_build")).unwrap();
     std::fs::write(
-        dir.join("src").join("node_modules").join("lib").join("x.md"),
+        dir.join("src")
+            .join("node_modules")
+            .join("lib")
+            .join("x.md"),
         "a",
     )
     .unwrap();
@@ -901,10 +881,7 @@ extensions = ["md", "yaml"]
     let cfg = config::load(&dir, None).unwrap();
 
     let resolved = cfg.resolve_blueprint("s/panel").unwrap();
-    assert_eq!(
-        resolved.file_path,
-        cfg.sources[0].mount.join("panel.yaml")
-    );
+    assert_eq!(resolved.file_path, cfg.sources[0].mount.join("panel.yaml"));
 }
 
 #[test]

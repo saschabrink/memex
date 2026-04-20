@@ -123,11 +123,7 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
     let db = cfg.db_path();
     let size = std::fs::metadata(&db).map(|m| m.len()).unwrap_or(0);
     if db.exists() {
-        println!(
-            "Index: {} ({})",
-            db.display(),
-            format_size(size)
-        );
+        println!("Index: {} ({})", db.display(), format_size(size));
     } else {
         println!(
             "Index: {} (not yet built — will be created on first search/list)",
@@ -188,7 +184,9 @@ fn check_remote(remote: &str) -> (bool, String) {
 /// derived from `root = "."` render cleanly.
 fn normalize_path(p: &Path) -> std::path::PathBuf {
     if p.file_name().is_some_and(|n| n == ".") {
-        p.parent().map(Path::to_path_buf).unwrap_or_else(|| p.to_path_buf())
+        p.parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| p.to_path_buf())
     } else {
         p.to_path_buf()
     }

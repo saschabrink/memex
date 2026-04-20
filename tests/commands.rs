@@ -52,7 +52,10 @@ fn edit_replaces_first_occurrence() {
     commands::edit::run(&env.cfg, "testsource/bp", "foo", "baz").unwrap();
 
     let fp = env.source_mount.join("bp.md");
-    assert_eq!(std::fs::read_to_string(&fp).unwrap(), "# Title\n\nbaz bar foo");
+    assert_eq!(
+        std::fs::read_to_string(&fp).unwrap(),
+        "# Title\n\nbaz bar foo"
+    );
 }
 
 #[test]

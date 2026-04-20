@@ -82,10 +82,7 @@ pub fn pull_ff_only(repo_dir: &Path) -> Result<String> {
         .args(["pull", "--ff-only"])
         .output()?;
     if !out.status.success() {
-        bail!(
-            "{}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
+        bail!("{}", String::from_utf8_lossy(&out.stderr).trim());
     }
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if stdout.contains("Already up to date") {
@@ -171,6 +168,10 @@ pub fn init_with_gitignore(repo_dir: &Path, source_name: &str) -> Result<()> {
         std::fs::write(&gitignore, ".db/\n")
             .with_context(|| format!("writing {}", gitignore.display()))?;
     }
-    commit(repo_dir, &[&gitignore], &format!("Init memex source: {source_name}"))?;
+    commit(
+        repo_dir,
+        &[&gitignore],
+        &format!("Init memex source: {source_name}"),
+    )?;
     Ok(())
 }
