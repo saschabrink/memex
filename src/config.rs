@@ -28,6 +28,13 @@ pub struct Source {
     /// `deps/ecto_context/usage-rules.md` with `index_filename = "usage-rules.md"`
     /// becomes slug `deps/ecto_context`. Like `index.html` or `mod.rs`.
     pub index_filename: Option<String>,
+    /// Scopes all hooks from this source's `hooks.toml` to a subdirectory of
+    /// the project root. Patterns in those hooks are matched against the path
+    /// with this prefix stripped; files outside the prefix never trigger them.
+    /// Useful for shared sources (e.g. a phoenix-docs repo) that are reused
+    /// across projects with different layouts — set `hook_base = "backend"` in
+    /// a monorepo and omit it in a pure-Phoenix project.
+    pub hook_base: Option<String>,
 }
 
 impl Source {
@@ -358,6 +365,7 @@ struct RawSource {
     #[serde(default)]
     readonly: bool,
     index_filename: Option<String>,
+    hook_base: Option<String>,
 }
 
 /// Only looks for `./memex.toml` in the given directory. No upward search,
@@ -442,6 +450,7 @@ pub fn load(start_dir: &Path, override_path: Option<&Path>) -> Result<MemexConfi
             extensions,
             readonly: raw_src.readonly,
             index_filename: raw_src.index_filename,
+            hook_base: raw_src.hook_base,
         });
     }
 

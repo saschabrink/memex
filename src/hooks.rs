@@ -62,6 +62,11 @@ pub struct Hook {
     pub when_file_exists: Option<String>,
     /// Source the hook came from (for diagnostics). `None` = project-level.
     pub source: Option<String>,
+    /// If set, this hook only fires for files under `base/` (project-relative).
+    /// The `base/` prefix is stripped before pattern matching, so patterns and
+    /// capture groups are always relative to the base directory.
+    /// `when_file_missing`/`when_file_exists` paths are also resolved under base.
+    pub base: Option<String>,
 }
 
 #[derive(Debug, Default)]
@@ -94,9 +99,21 @@ impl HookSet {
         let abs = project_root.join(file_path);
         let mut cached_content: Option<Option<String>> = None;
         for hook in hooks {
+            // When a base is set, only files under `base/` can trigger this hook.
+            // Strip the prefix before matching so patterns stay base-relative.
+            let match_path: &str = if let Some(base) = &hook.base {
+                let prefix = format!("{}/", base);
+                match file_path.strip_prefix(prefix.as_str()) {
+                    Some(rest) => rest,
+                    None => continue,
+                }
+            } else {
+                file_path
+            };
+
             // Path-regex captures drive substitution. If no path regex,
             // fall back to an empty-pattern match so `caps.get(0)` returns
-            // the input (still useful for `${0}` = file path).
+            // the input (still useful for `${0}` = match_path).
             let empty_re: Regex;
             let (path_re, path_src) = match &hook.pattern {
                 Some(re) => (re, hook.pattern_src.as_deref().unwrap_or("")),
@@ -105,7 +122,7 @@ impl HookSet {
                     (&empty_re, "")
                 }
             };
-            let caps = match path_re.captures(file_path) {
+            let caps = match path_re.captures(match_path) {
                 Ok(Some(c)) => c,
                 Ok(None) => continue,
                 Err(_) => continue,
@@ -124,15 +141,21 @@ impl HookSet {
             }
 
             // Conditional file checks (path-substituted).
+            // When a base is set, paths are resolved relative to base so that
+            // capture groups (which are base-relative) map to the right files.
+            let resolve_root: std::borrow::Cow<Path> = match &hook.base {
+                Some(b) => std::borrow::Cow::Owned(project_root.join(b)),
+                None => std::borrow::Cow::Borrowed(project_root),
+            };
             if let Some(tmpl) = &hook.when_file_missing {
                 let resolved = substitute(tmpl, &caps);
-                if project_root.join(&resolved).exists() {
+                if resolve_root.join(&resolved).exists() {
                     continue;
                 }
             }
             if let Some(tmpl) = &hook.when_file_exists {
                 let resolved = substitute(tmpl, &caps);
-                if !project_root.join(&resolved).exists() {
+                if !resolve_root.join(&resolved).exists() {
                     continue;
                 }
             }
@@ -230,7 +253,7 @@ pub fn load(cfg: &MemexConfig) -> Result<HookSet> {
     // Project-level.
     let project_hooks = cfg.config_dir.join("hooks.toml");
     if project_hooks.exists() {
-        load_into(&project_hooks, None, &mut set)
+        load_into(&project_hooks, None, None, &mut set)
             .with_context(|| format!("loading {}", project_hooks.display()))?;
     }
 
@@ -238,32 +261,47 @@ pub fn load(cfg: &MemexConfig) -> Result<HookSet> {
     for source in &cfg.sources {
         let path = source.mount.join("hooks.toml");
         if path.exists() {
-            load_into(&path, Some(source.name.clone()), &mut set)
-                .with_context(|| format!("loading {}", path.display()))?;
+            load_into(
+                &path,
+                Some(source.name.clone()),
+                source.hook_base.clone(),
+                &mut set,
+            )
+            .with_context(|| format!("loading {}", path.display()))?;
         }
     }
 
     Ok(set)
 }
 
-fn load_into(path: &Path, source: Option<String>, out: &mut HookSet) -> Result<()> {
+fn load_into(
+    path: &Path,
+    source: Option<String>,
+    base: Option<String>,
+    out: &mut HookSet,
+) -> Result<()> {
     let content =
         std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let raw: RawHooksFile =
         toml::from_str(&content).with_context(|| format!("parsing {}", path.display()))?;
 
     for raw_hook in raw.pre_write {
-        let hook = build_hook(raw_hook, Event::PreWrite, source.clone())?;
+        let hook = build_hook(raw_hook, Event::PreWrite, source.clone(), base.clone())?;
         out.pre_write.push(hook);
     }
     for raw_hook in raw.post_write {
-        let hook = build_hook(raw_hook, Event::PostWrite, source.clone())?;
+        let hook = build_hook(raw_hook, Event::PostWrite, source.clone(), base.clone())?;
         out.post_write.push(hook);
     }
     Ok(())
 }
 
-fn build_hook(raw: RawHook, event: Event, source: Option<String>) -> Result<Hook> {
+fn build_hook(
+    raw: RawHook,
+    event: Event,
+    source: Option<String>,
+    base: Option<String>,
+) -> Result<Hook> {
     // A stable identifier for this hook in error messages: prefer the path
     // pattern, fall back to the content pattern, else "(unnamed)".
     let hook_id = raw
@@ -347,6 +385,7 @@ fn build_hook(raw: RawHook, event: Event, source: Option<String>) -> Result<Hook
         when_file_missing: raw.when_file_missing,
         when_file_exists: raw.when_file_exists,
         source,
+        base,
     })
 }
 

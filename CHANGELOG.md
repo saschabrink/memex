@@ -5,6 +5,17 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `hook_base` per-source config option. When set, all hooks loaded from
+  that source's `hooks.toml` only fire for files under the given
+  subdirectory (project-relative). The prefix is stripped before pattern
+  matching, so patterns and capture groups stay base-relative. Useful for
+  shared sources (e.g. a phoenix-docs or react-native-docs repo) that are
+  reused across projects with different layouts — set `hook_base = "backend"`
+  in a monorepo and omit it in a single-stack project.
+
 ## [0.9.0] - 2026-04-17
 
 Sources can now index non-markdown plain-text formats. Bring YAML data

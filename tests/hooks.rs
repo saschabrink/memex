@@ -569,6 +569,177 @@ blueprint = "x"
     assert!(err.contains("content_pattern"), "got: {err}");
 }
 
+// ---------- hook_base ----------
+
+/// Build a TestEnv where the `phoenix-docs` source has `hook_base = "backend"`.
+fn env_with_hook_base(hook_base: &str) -> TestEnv {
+    let tmp_dir = mk_tmp("memex-hookbase-");
+    let project_dir = tmp_dir.join("project");
+    std::fs::create_dir_all(&project_dir).unwrap();
+    common::git_init(&project_dir);
+
+    // Source mount lives inside the project so hooks.toml is easy to place.
+    let source_mount = project_dir.join("shared-docs");
+    std::fs::create_dir_all(&source_mount).unwrap();
+
+    std::fs::write(
+        project_dir.join("memex.toml"),
+        format!(
+            r#"project_name = "testproject"
+
+[shared-docs]
+mount = "shared-docs"
+hook_base = "{hook_base}"
+"#
+        ),
+    )
+    .unwrap();
+
+    let cfg = config::load(&project_dir, None).unwrap();
+    cfg.ensure_initialized().unwrap();
+
+    TestEnv {
+        tmp_dir,
+        project_dir,
+        source_mount,
+        cfg,
+    }
+}
+
+#[test]
+fn hook_base_scopes_hook_to_subdirectory() {
+    let env = env_with_hook_base("backend");
+    write_file(
+        &env.source_mount.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*\\.ex$"
+blueprint = "phoenix-rules"
+"#,
+    );
+    let set = hooks::load(&env.cfg).unwrap();
+
+    // File under the base → fires.
+    let hit = set.advise(Event::PreWrite, "backend/lib/foo.ex", &env.project_dir);
+    assert!(hit.is_some());
+    assert_eq!(hit.unwrap().blueprints, vec!["phoenix-rules"]);
+
+    // File outside the base → no match.
+    assert!(set
+        .advise(Event::PreWrite, "mobile/lib/foo.ex", &env.project_dir)
+        .is_none());
+
+    // File at project root (no base prefix) → no match.
+    assert!(set
+        .advise(Event::PreWrite, "lib/foo.ex", &env.project_dir)
+        .is_none());
+}
+
+#[test]
+fn hook_base_strips_prefix_for_pattern_captures() {
+    let env = env_with_hook_base("backend");
+    write_file(
+        &env.source_mount.join("hooks.toml"),
+        r#"
+[[post-write]]
+pattern = "^lib/(.+)\\.ex$"
+text = "write test/${1}_test.exs"
+"#,
+    );
+    let set = hooks::load(&env.cfg).unwrap();
+
+    let advice = set
+        .advise(
+            Event::PostWrite,
+            "backend/lib/accounts.ex",
+            &env.project_dir,
+        )
+        .unwrap();
+    // ${1} should be the base-relative capture, not include "backend/".
+    assert_eq!(advice.text.as_deref(), Some("write test/accounts_test.exs"));
+}
+
+#[test]
+fn hook_base_when_file_missing_resolved_under_base() {
+    let env = env_with_hook_base("backend");
+    write_file(
+        &env.source_mount.join("hooks.toml"),
+        r#"
+[[post-write]]
+pattern = "^lib/(.+)\\.ex$"
+text = "create test/${1}_test.exs"
+when_file_missing = "test/${1}_test.exs"
+"#,
+    );
+    let set = hooks::load(&env.cfg).unwrap();
+
+    // Test file absent under backend/ → fires.
+    let fired = set.advise(Event::PostWrite, "backend/lib/orders.ex", &env.project_dir);
+    assert!(fired.is_some());
+
+    // Create the test file under backend/ → hook should no longer fire.
+    write_file(&env.project_dir.join("backend/test/orders_test.exs"), "");
+    let silent = set.advise(Event::PostWrite, "backend/lib/orders.ex", &env.project_dir);
+    assert!(silent.is_none());
+}
+
+#[test]
+fn hook_base_without_hook_base_still_matches_from_root() {
+    // Verify existing behavior is unchanged when hook_base is not set.
+    let env = TestEnv::default_env();
+    write_file(
+        &env.project_dir.join("hooks.toml"),
+        r#"
+[[pre-write]]
+pattern = "lib/.*\\.ex$"
+blueprint = "elixir-rules"
+"#,
+    );
+    let set = hooks::load(&env.cfg).unwrap();
+
+    let hit = set.advise(Event::PreWrite, "lib/foo.ex", &env.project_dir);
+    assert!(hit.is_some());
+    assert_eq!(hit.unwrap().blueprints, vec!["elixir-rules"]);
+}
+
+#[test]
+fn hook_base_parsed_from_memex_toml() {
+    let tmp = mk_tmp("memex-hookbase-cfg-");
+    std::fs::write(
+        tmp.join("memex.toml"),
+        r#"project_name = "p"
+
+[phoenix-docs]
+mount = "docs"
+hook_base = "backend"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(tmp.join("docs")).unwrap();
+
+    let cfg = config::load(&tmp, None).unwrap();
+    let src = cfg.source_by_name("phoenix-docs").unwrap();
+    assert_eq!(src.hook_base.as_deref(), Some("backend"));
+}
+
+#[test]
+fn hook_base_absent_when_not_configured() {
+    let tmp = mk_tmp("memex-hookbase-none-");
+    std::fs::write(
+        tmp.join("memex.toml"),
+        r#"project_name = "p"
+
+[docs]
+mount = "docs"
+"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(tmp.join("docs")).unwrap();
+
+    let cfg = config::load(&tmp, None).unwrap();
+    assert!(cfg.source_by_name("docs").unwrap().hook_base.is_none());
+}
+
 // ---------- TestEnv helper ----------
 
 impl TestEnv {
