@@ -5,7 +5,7 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.10.0] - 2026-04-24
 
 ### Added
 - `hook_base` per-source config option. When set, all hooks loaded from
@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shared sources (e.g. a phoenix-docs or react-native-docs repo) that are
   reused across projects with different layouts — set `hook_base = "backend"`
   in a monorepo and omit it in a single-stack project.
+
+### Changed
+- `memex sync` now automatically updates the local clone's `origin` URL
+  when the `remote` value in `memex.toml` no longer matches. Previously
+  the change was silently ignored and syncs continued against the old remote.
 
 ## [0.9.0] - 2026-04-17
 

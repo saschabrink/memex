@@ -7,8 +7,11 @@
 
 mod common;
 
+use common::{mk_tmp, run_git};
 use memex::commands;
+use memex::config;
 use memex::db;
+use memex::git;
 
 use common::create_env;
 
@@ -89,6 +92,120 @@ fn move_within_same_source() {
     db::setup(&conn).unwrap();
     assert!(db::get(&conn, "testsource/old").unwrap().is_none());
     assert!(db::get(&conn, "testsource/new").unwrap().is_some());
+}
+
+// ---------- sync: remote URL update ----------
+
+#[test]
+fn sync_updates_remote_url_when_config_changes() {
+    let tmp = mk_tmp("memex-sync-remote-");
+
+    // Set up two bare repos acting as remote-a and remote-b.
+    let remote_a = tmp.join("remote-a.git");
+    let remote_b = tmp.join("remote-b.git");
+    for r in [&remote_a, &remote_b] {
+        std::fs::create_dir_all(r).unwrap();
+        run_git(r, &["init", "--bare", "-q"]);
+    }
+    // Seed remote-a with a commit so clone works.
+    let seed = tmp.join("seed");
+    std::fs::create_dir_all(&seed).unwrap();
+    run_git(&seed, &["init", "-q"]);
+    run_git(&seed, &["config", "user.email", "t@t.test"]);
+    run_git(&seed, &["config", "user.name", "Test"]);
+    std::fs::write(seed.join("note.md"), "# Note").unwrap();
+    run_git(&seed, &["add", "."]);
+    run_git(&seed, &["commit", "-q", "-m", "init"]);
+    run_git(
+        &seed,
+        &["push", "-q", &remote_a.to_string_lossy(), "HEAD:main"],
+    );
+
+    let project = tmp.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let remote_a_url = remote_a.to_string_lossy().to_string();
+    let remote_b_url = remote_b.to_string_lossy().to_string();
+
+    // Initial memex.toml pointing at remote-a.
+    std::fs::write(
+        project.join("memex.toml"),
+        format!("project_name = \"p\"\n\n[docs]\nremote = \"{remote_a_url}\"\nmount = \"docs\"\n"),
+    )
+    .unwrap();
+
+    // First sync: clones from remote-a.
+    let cfg = config::load(&project, None).unwrap();
+    commands::sync::run(&cfg).unwrap();
+    assert!(project.join("docs").exists());
+    assert_eq!(
+        git::get_remote_url(&project.join("docs"), "origin")
+            .unwrap()
+            .as_deref(),
+        Some(remote_a_url.as_str())
+    );
+
+    // Change memex.toml to point at remote-b.
+    std::fs::write(
+        project.join("memex.toml"),
+        format!("project_name = \"p\"\n\n[docs]\nremote = \"{remote_b_url}\"\nmount = \"docs\"\n"),
+    )
+    .unwrap();
+
+    // Second sync: should update origin to remote-b.
+    let cfg2 = config::load(&project, None).unwrap();
+    commands::sync::run(&cfg2).unwrap();
+    assert_eq!(
+        git::get_remote_url(&project.join("docs"), "origin")
+            .unwrap()
+            .as_deref(),
+        Some(remote_b_url.as_str())
+    );
+}
+
+#[test]
+fn sync_leaves_remote_unchanged_when_url_matches() {
+    let tmp = mk_tmp("memex-sync-same-");
+
+    let remote = tmp.join("remote.git");
+    std::fs::create_dir_all(&remote).unwrap();
+    run_git(&remote, &["init", "--bare", "-q"]);
+
+    let seed = tmp.join("seed");
+    std::fs::create_dir_all(&seed).unwrap();
+    run_git(&seed, &["init", "-q"]);
+    run_git(&seed, &["config", "user.email", "t@t.test"]);
+    run_git(&seed, &["config", "user.name", "Test"]);
+    std::fs::write(seed.join("note.md"), "# Note").unwrap();
+    run_git(&seed, &["add", "."]);
+    run_git(&seed, &["commit", "-q", "-m", "init"]);
+    run_git(
+        &seed,
+        &["push", "-q", &remote.to_string_lossy(), "HEAD:main"],
+    );
+
+    let project = tmp.join("project");
+    std::fs::create_dir_all(&project).unwrap();
+    let remote_url = remote.to_string_lossy().to_string();
+
+    std::fs::write(
+        project.join("memex.toml"),
+        format!("project_name = \"p\"\n\n[docs]\nremote = \"{remote_url}\"\nmount = \"docs\"\n"),
+    )
+    .unwrap();
+
+    let cfg = config::load(&project, None).unwrap();
+    commands::sync::run(&cfg).unwrap();
+
+    // Sync again with same URL — remote should stay the same.
+    let cfg2 = config::load(&project, None).unwrap();
+    commands::sync::run(&cfg2).unwrap();
+
+    assert_eq!(
+        git::get_remote_url(&project.join("docs"), "origin")
+            .unwrap()
+            .as_deref(),
+        Some(remote_url.as_str())
+    );
 }
 
 #[test]

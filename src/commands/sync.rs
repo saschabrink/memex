@@ -26,6 +26,17 @@ pub fn run(cfg: &MemexConfig) -> Result<()> {
             continue;
         }
 
+        // If the configured remote URL changed, update the local clone.
+        match git::get_remote_url(&source.mount, "origin") {
+            Ok(Some(current)) if current != *remote => {
+                match git::set_remote_url(&source.mount, "origin", remote) {
+                    Ok(()) => println!("{}: remote updated → {remote}", source.name),
+                    Err(e) => println!("{}: failed to update remote — {e}", source.name),
+                }
+            }
+            _ => {}
+        }
+
         // Fast-forward-only pull.
         match git::pull_ff_only(&source.mount) {
             Ok(msg) => println!("{}: {msg}", source.name),

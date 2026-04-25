@@ -145,6 +145,35 @@ pub fn show(repo_dir: &Path, hash: &str, file_path: &Path) -> Result<String> {
     Ok(String::from_utf8_lossy(&out.stdout).to_string())
 }
 
+pub fn get_remote_url(repo_dir: &Path, remote: &str) -> Result<Option<String>> {
+    let out = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .args(["remote", "get-url", remote])
+        .output()?;
+    if !out.status.success() {
+        return Ok(None); // remote doesn't exist
+    }
+    Ok(Some(
+        String::from_utf8_lossy(&out.stdout).trim().to_string(),
+    ))
+}
+
+pub fn set_remote_url(repo_dir: &Path, remote: &str, url: &str) -> Result<()> {
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(repo_dir)
+        .args(["remote", "set-url", remote, url])
+        .status()?;
+    if !status.success() {
+        bail!(
+            "git remote set-url {remote} failed in {}",
+            repo_dir.display()
+        );
+    }
+    Ok(())
+}
+
 pub fn is_inside_repo(dir: &Path) -> Result<bool> {
     let out = Command::new("git")
         .arg("-C")
