@@ -17,6 +17,7 @@ pub fn commit(repo_dir: &Path, paths: &[&Path], message: &str) -> Result<()> {
         .arg("-C")
         .arg(repo_dir)
         .arg("commit")
+        .arg("--no-verify")
         .arg("-m")
         .arg(message)
         .status()?;

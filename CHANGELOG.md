@@ -5,6 +5,13 @@ All notable changes to memex will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.1] - 2026-04-26
+
+### Fixed
+- Blueprint commits now skip the host repo's pre-commit hook (`git commit --no-verify`).
+  Pre-commit hooks in the surrounding project often expect application code conventions
+  (linting, formatting) that don't apply to plain-text blueprint files.
+
 ## [0.10.0] - 2026-04-24
 
 ### Added
