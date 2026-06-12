@@ -59,7 +59,7 @@ include = ["TODOS.md", "docs/**/*.md"]
 
 [phoenix-liveview]
 mount  = "docs/shared/phoenix-liveview"
-remote = "git@github.com:saschabrink/phoenix-liveview.git"
+remote = "git@github.com:saschabrink/memex-blueprints-phoenix-framework.git"
 ```
 
 Then:
@@ -133,7 +133,7 @@ include = ["TODOS.md", "docs/**/*.md"]
 
 [phoenix-liveview]
 mount  = "docs/shared/phoenix-liveview"
-remote = "git@github.com:saschabrink/phoenix-liveview.git"
+remote = "git@github.com:saschabrink/memex-blueprints-phoenix-framework.git"
 ```
 
 You get these slugs:
