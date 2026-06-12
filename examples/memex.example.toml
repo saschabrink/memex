@@ -74,7 +74,7 @@ mount = "docs"
 # ═══════════════════════════════════════════════════════════════════════
 #
 # Many package ecosystems have started shipping a per-package agent brief:
-# `usage-rules.md` in Elixir/Hex (ExFoundry, Ash, …), `AGENTS.md` in
+# `usage-rules.md` in Elixir/Hex (Ash, …), `AGENTS.md` in
 # emerging Node/Rust conventions, `llms.txt` on the horizon.
 #
 # The `index_filename` option makes the matching file represent its
