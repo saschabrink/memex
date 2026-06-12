@@ -3,7 +3,7 @@
 # platform and places it in ~/.local/bin (or $MEMEX_INSTALL_DIR).
 #
 # Usage:
-#   curl -LsSf https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | sh
+#   curl -LsSf https://raw.githubusercontent.com/saschabrink/memex/main/install.sh | sh
 #
 # Env overrides:
 #   MEMEX_INSTALL_DIR — target directory (default: $HOME/.local/bin)
@@ -11,7 +11,7 @@
 
 set -eu
 
-REPO="exfoundry/memex"
+REPO="saschabrink/memex"
 BIN_NAME="memex"
 INSTALL_DIR="${MEMEX_INSTALL_DIR:-$HOME/.local/bin}"
 

@@ -4,7 +4,7 @@ version = "0.10.2"
 edition = "2021"
 description = "Personal knowledge base CLI with local semantic search."
 license = "MIT"
-repository = "https://github.com/exfoundry/memex"
+repository = "https://github.com/saschabrink/memex"
 
 [[bin]]
 name = "memex"

@@ -18,7 +18,7 @@ Every write is automatically committed to git, so every blueprint has a full ver
 ## Installation
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | sh
+curl -LsSf https://raw.githubusercontent.com/saschabrink/memex/main/install.sh | sh
 ```
 
 Downloads the latest release binary to `~/.local/bin/memex`. Prebuilt binaries ship for:
@@ -39,7 +39,7 @@ export PATH="$HOME/.local/bin:$PATH"
 For other platforms, build from source:
 
 ```bash
-git clone https://github.com/exfoundry/memex
+git clone https://github.com/saschabrink/memex
 cd memex
 cargo build --release
 install -m 0755 target/release/memex ~/.local/bin/memex
@@ -59,7 +59,7 @@ include = ["TODOS.md", "docs/**/*.md"]
 
 [phoenix-liveview]
 mount  = "docs/shared/phoenix-liveview"
-remote = "git@github.com:exfoundry/phoenix-liveview.git"
+remote = "git@github.com:saschabrink/phoenix-liveview.git"
 ```
 
 Then:
@@ -133,7 +133,7 @@ include = ["TODOS.md", "docs/**/*.md"]
 
 [phoenix-liveview]
 mount  = "docs/shared/phoenix-liveview"
-remote = "git@github.com:exfoundry/phoenix-liveview.git"
+remote = "git@github.com:saschabrink/phoenix-liveview.git"
 ```
 
 You get these slugs:
@@ -291,7 +291,7 @@ Before using memex tools for the first time in a session, run:
 
 If the command isn't found, install it first:
 
-    curl -LsSf https://raw.githubusercontent.com/exfoundry/memex/main/install.sh | sh
+    curl -LsSf https://raw.githubusercontent.com/saschabrink/memex/main/install.sh | sh
 ```
 
 The CLI output is plain markdown, safe to inline into any agent's context.
